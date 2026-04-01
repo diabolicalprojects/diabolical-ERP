@@ -255,6 +255,14 @@ const AppContent = () => {
     
     const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
 
+    // Fallback: Si después de 3 segundos sigue cargando, forzar el cierre del splash
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setSplashLoading(false);
+        }, 3000);
+        return () => clearTimeout(timer);
+    }, []);
+
     // Si aún está cargando el contexto o el splash, mostrar splash
     const showSplash = splashLoading || contextLoading;
 

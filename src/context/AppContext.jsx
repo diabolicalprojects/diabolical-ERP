@@ -39,38 +39,44 @@ export const AppProvider = ({ children }) => {
 
     // --- Sync Logic ---
     const syncData = async () => {
-        if (!isAuthenticated) return;
+        if (!isAuthenticated) {
+            setLoading(false);
+            return;
+        }
         try {
             const [
                 inv, cust, proj, track, q, d, p, v, r, pay, s, qp, qs
             ] = await Promise.all([
-                api.get('/api/inventory'),
-                api.get('/api/customers'),
-                api.get('/api/projects'),
-                api.get('/api/tracking'),
-                api.get('/api/quotes'),
-                api.get('/api/deals'),
-                api.get('/api/purchases'),
-                api.get('/api/vendors'),
-                api.get('/api/receivables'),
-                api.get('/api/payables'),
-                api.get('/api/services'),
-                api.get('/api/quote-presets'),
-                api.get('/api/quote-settings')
+                api.get('/api/inventory').catch(() => ({ data: [] })),
+                api.get('/api/customers').catch(() => ({ data: [] })),
+                api.get('/api/projects').catch(() => ({ data: [] })),
+                api.get('/api/tracking').catch(() => ({ data: [] })),
+                api.get('/api/quotes').catch(() => ({ data: [] })),
+                api.get('/api/deals').catch(() => ({ grouped: { nuevo: [], contactado: [], propuesta: [], negociacion: [], ganado: [], perdido: [] } })),
+                api.get('/api/purchases').catch(() => ({ data: [] })),
+                api.get('/api/vendors').catch(() => ({ data: [] })),
+                api.get('/api/receivables').catch(() => ({ data: [] })),
+                api.get('/api/payables').catch(() => ({ data: [] })),
+                api.get('/api/services').catch(() => ({ data: [] })),
+                api.get('/api/quote-presets').catch(() => ({ data: [] })),
+                api.get('/api/quote-settings').catch(() => ({ 
+                    companyName: 'DIABOLICAL AI', 
+                    taxRate: 16 
+                }))
             ]);
 
-            setInventory(inv.data);
-            setCustomers(cust.data);
-            setProjects(proj.data);
-            setTracking(track.data);
-            setQuotes(q.data);
-            setDeals(d.grouped);
-            setPurchases(p.data);
-            setVendors(v.data);
-            setReceivables(r.data);
-            setPayables(pay.data);
-            setServices(s.data);
-            setQuotePresets(qp.data);
+            setInventory(inv.data || []);
+            setCustomers(cust.data || []);
+            setProjects(proj.data || []);
+            setTracking(track.data || []);
+            setQuotes(q.data || []);
+            setDeals(d.grouped || d.data || { nuevo: [], contactado: [], propuesta: [], negociacion: [], ganado: [], perdido: [] });
+            setPurchases(p.data || []);
+            setVendors(v.data || []);
+            setReceivables(r.data || []);
+            setPayables(pay.data || []);
+            setServices(s.data || []);
+            setQuotePresets(qp.data || []);
             setQuoteSettings(qs);
         } catch (e) {
             console.error('Error syncing data:', e);
