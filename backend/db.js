@@ -6,7 +6,7 @@ const { Pool } = pg;
 
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
-    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+    ssl: false, // Local Dokploy Postgres doesn't require SSL usually
 });
 
 pool.on('connect', () => {
