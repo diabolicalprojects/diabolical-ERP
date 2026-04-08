@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { Presentation, Eye, EyeOff, TrendingUp, Activity, Calendar, ClipboardList, Info } from 'lucide-react';
+import { api } from '../../services/api';
 import ModuleTutorial from '../Common/ModuleTutorial';
 import Logo from '../../assets/logo.svg';
 
@@ -33,13 +34,10 @@ const Metrics = () => {
     const [loading, setLoading] = useState(true);
     const [visibility, setVisibility] = useState({ sales: true, costs: true });
     
-    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-
     useEffect(() => {
         const fetchMetrics = async () => {
             try {
-                const res = await fetch(`${API_URL}/api/metrics/summary`);
-                const data = await res.json();
+                const data = await api.get('/api/metrics/summary');
                 setMetrics(data);
             } catch (error) {
                 console.error('Error fetching metrics:', error);

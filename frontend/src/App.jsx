@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation, useNavigate, Navigate } from 'react-router-dom';
 import { useApp, AppProvider } from './context/AppContext';
 import Login from './components/Common/Login';
+import { api } from './services/api';
 import {
     LayoutDashboard,
     Users,
@@ -40,9 +41,20 @@ import Roles from './components/Roles/Roles';
 const Dashboard = () => {
     const { deals, projects, tracking, toggleTracking, receivables, payables } = useApp();
     const navigate = useNavigate();
+    const [summary, setSummary] = useState({
+        pipeline: 0,
+        cxc_pending: 0,
+        cxp_pending: 0,
+        quotes_accepted: 0
+    });
 
-    const pipelineValue = Object.values(deals).flat().reduce((acc, d) => acc + d.value, 0);
-    const totalCxC = receivables.reduce((acc, r) => acc + (r.amount - r.paid), 0);
+    useEffect(() => {
+        api.get('/api/metrics/summary').then(setSummary).catch(console.error);
+    }, []);
+
+    const pipelineValue = summary.pipeline;
+    const totalCxC = summary.cxc_pending;
+    const salesMonth = summary.quotes_accepted;
 
     return (
         <div className="animate-fade">
@@ -62,15 +74,15 @@ const Dashboard = () => {
                 <div className="glass-card kpi-card">
                     <div className="kpi-icon purple"><TrendingUp size={20} /></div>
                     <div className="kpi-info">
-                        <span className="subtitle">Ventas Mes</span>
-                        <h2>$128k</h2>
+                        <span className="subtitle">Ventas (Cerradas)</span>
+                        <h2>${(salesMonth / 1000).toFixed(1)}k</h2>
                     </div>
                 </div>
                 <div className="glass-card kpi-card">
                     <div className="kpi-icon violet"><Briefcase size={20} /></div>
                     <div className="kpi-info">
                         <span className="subtitle">Pipeline</span>
-                        <h2>${(pipelineValue / 1000).toFixed(0)}k</h2>
+                        <h2>${(pipelineValue / 1000).toFixed(1)}k</h2>
                     </div>
                 </div>
                 <div className="glass-card kpi-card">
