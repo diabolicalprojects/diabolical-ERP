@@ -1092,26 +1092,28 @@ const initDB = async () => {
             }
         }
 
-        // 2. Check for admin user
-        const adminCheck = await pool.query('SELECT COUNT(*) FROM users WHERE role = $1', ['admin']);
-        if (parseInt(adminCheck.rows[0].count) === 0) {
-            console.log('[INIT] No admin user found. Creating default admin...');
-            
-            const adminEmail = process.env.ADMIN_EMAIL || 'admin@diabolical.ai';
-            const adminPass = process.env.ADMIN_PASSWORD || 'Diabolical2024!';
-            const adminName = process.env.ADMIN_NAME || 'Administrador Diabolical';
-            
-            const hash = await bcrypt.hash(adminPass, 12);
-            
-            await pool.query(
-                `INSERT INTO users (name, email, password, role, is_active) 
-                 VALUES ($1, $2, $3, 'admin', TRUE)`,
-                [adminName, adminEmail, hash]
-            );
-            console.log(`[BOOTSTRAP] Admin created: ${adminEmail}`);
-        }
+        // 2. Ensure admin user exists and is up to date
+        console.log('[INIT] Syncing administrator account...');
+        
+        const adminEmail = process.env.ADMIN_EMAIL || 'admin@diabolical.ai';
+        const adminPass = process.env.ADMIN_PASSWORD || 'Diabolical2024!';
+        const adminName = process.env.ADMIN_NAME || 'Administrador Diabolical';
+        
+        const hash = await bcrypt.hash(adminPass, 12);
+        
+        await pool.query(
+            `INSERT INTO users (name, email, password, role, is_active) 
+             VALUES ($1, $2, $3, 'admin', TRUE)
+             ON CONFLICT (email) DO UPDATE 
+             SET password = EXCLUDED.password, 
+                 name = EXCLUDED.name, 
+                 role = 'admin',
+                 is_active = TRUE`,
+            [adminName, adminEmail, hash]
+        );
+        console.log(`[BOOTSTRAP] Admin synced: ${adminEmail}`);
     } catch (err) {
-        console.error('[BOOTSTRAP] Error:', err.message);
+        console.error('[BOOTSTRAP] Critical Error:', err.message);
     }
 };
 
