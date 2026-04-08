@@ -143,56 +143,6 @@ export const AppProvider = ({ children }) => {
         document.documentElement.setAttribute('data-theme', newTheme);
     };
 
-    // --- Credentials Vault ---
-    const getClientCredentials = async (clientId) => {
-        const res = await api.get(`/api/customers/${clientId}/credentials`);
-        return res.data || [];
-    };
-
-    const addClientCredential = async (clientId, cred) => {
-        await api.post(`/api/customers/${clientId}/credentials`, cred);
-    };
-
-    const revealCredential = async (id) => {
-        const res = await api.get(`/api/credentials/${id}/reveal`);
-        return res.password;
-    };
-
-    const deleteClientCredential = async (id) => {
-        await api.delete(`/api/credentials/${id}`);
-    };
-
-    // Quotes
-    const addQuote = async (quote) => {
-        await api.post('/api/quotes', quote);
-        syncData();
-    };
-
-    const deleteQuote = async (id) => {
-        await api.delete(`/api/quotes/${id}`);
-        syncData();
-    };
-
-    const saveQuoteSettings = async (settings) => {
-        // Map frontend camelCase to backend snake_case
-        const payload = {
-            company_name: settings.companyName,
-            company_address: settings.companyAddress,
-            company_rfc: settings.companyRFC,
-            accent_color: settings.accentColor,
-            tax_rate: settings.taxRate,
-            footer_note: settings.footerNote,
-            signature_label_left: settings.signatureLabelLeft,
-            signature_label_right: settings.signatureLabelRight,
-            logo_url: settings.logoUrl
-        };
-        const res = await api.put('/api/quote-settings', payload);
-        setQuoteSettings(res);
-        return res;
-    };
-
-
-
     useEffect(() => {
         document.documentElement.setAttribute('data-theme', theme);
         const storedUser = localStorage.getItem('diabolical_user');
@@ -212,17 +162,15 @@ export const AppProvider = ({ children }) => {
             customers, setCustomers,
             projects, setProjects,
             tracking, toggleTracking,
-            quotes, setQuotes, addQuote, deleteQuote,
+            quotes, setQuotes,
             deals, setDeals, addDeal, deleteDeal,
-
             purchases, setPurchases, vendors, setVendors, receiveOrder,
             receivables, setReceivables, registerPayment,
             payables, setPayables,
             customerStatuses, projectStatuses,
-            quoteSettings, setQuoteSettings, saveQuoteSettings,
+            quoteSettings, setQuoteSettings,
             services, setServices,
             quotePresets, setQuotePresets,
-            getClientCredentials, addClientCredential, revealCredential, deleteClientCredential,
             userRole: user?.role || 'user'
         }}>
             {children}

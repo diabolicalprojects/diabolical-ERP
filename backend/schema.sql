@@ -261,21 +261,19 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 );
 
 CREATE INDEX IF NOT EXISTS idx_audit_logs_user     ON audit_logs(user_id);
-CREATE INDEX IF NOT EXISTS idx_audit_logs_resource ON audit_logs(resource, resource_id);
-
 -- ============================================================
--- CLIENT CREDENTIALS VAULT (Bóveda Segura)
+-- CLIENT CREDENTIALS (Vault)
 -- ============================================================
 CREATE TABLE IF NOT EXISTS client_credentials (
-    id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    client_id        UUID REFERENCES customers(id) ON DELETE CASCADE,
-    service_name     VARCHAR(200) NOT NULL,
-    username         VARCHAR(200),
-    encrypted_pass   TEXT NOT NULL,
-    iv               TEXT NOT NULL,
-    auth_tag         TEXT NOT NULL,
-    created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    client_id         UUID NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+    service_name      VARCHAR(200) NOT NULL,
+    username          VARCHAR(120),
+    encrypted_password TEXT NOT NULL, -- Hex string
+    iv                TEXT NOT NULL, -- Initialization Vector (Hex)
+    auth_tag          TEXT NOT NULL, -- GCM Auth Tag (Hex)
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_client_credentials_client ON client_credentials(client_id);
+CREATE INDEX IF NOT EXISTS idx_credentials_client ON client_credentials(client_id);

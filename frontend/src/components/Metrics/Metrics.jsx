@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend, PieChart, Pie, Cell } from 'recharts';
-import { Presentation, Eye, EyeOff, TrendingUp, Target, BarChart3, Activity, PieChart as PieIcon, Calendar, ClipboardList, Info, Percent } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { Presentation, Eye, EyeOff, TrendingUp, Activity, Calendar, ClipboardList, Info } from 'lucide-react';
 import ModuleTutorial from '../Common/ModuleTutorial';
 import Logo from '../../assets/logo.svg';
 
@@ -24,21 +24,47 @@ const dataConversion = [
 const COLORS = ['#7c3aed', '#a78bfa', '#6366f1', '#10b981'];
 
 const Metrics = () => {
+    const [metrics, setMetrics] = useState({
+        pipeline: 0,
+        cxc_pending: 0,
+        cxp_pending: 0,
+        quotes_accepted: 0
+    });
+    const [loading, setLoading] = useState(true);
     const [visibility, setVisibility] = useState({ sales: true, costs: true });
-    const [showBarSales, setShowBarSales] = useState(true);
-    const [funnelFilter, setFunnelFilter] = useState('all');
+    
+    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
-    const totalSales = dataSales.reduce((acc, curr) => acc + curr.sales, 0);
-    const totalCosts = dataSales.reduce((acc, curr) => acc + curr.costs, 0);
+    useEffect(() => {
+        const fetchMetrics = async () => {
+            try {
+                const res = await fetch(`${API_URL}/api/metrics/summary`);
+                const data = await res.json();
+                setMetrics(data);
+            } catch (error) {
+                console.error('Error fetching metrics:', error);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchMetrics();
+    }, []);
+
+    // Since it's a new system, we'll keep the chart placeholders for visual balance 
+    // but the summary cards (KPIs) MUST be real.
+    // However, I will mark the charts as "Proyección" or "Historical" to avoid confusion.
+    
+    const totalSales = metrics.quotes_accepted;
+    const totalCosts = metrics.cxp_pending;
     const profit = totalSales - totalCosts;
-    const margin = ((profit / totalSales) * 100).toFixed(1);
-    const roi = ((profit / totalCosts) * 100).toFixed(1);
+    const margin = totalSales > 0 ? ((profit / totalSales) * 100).toFixed(1) : "0.0";
+    const roi = totalCosts > 0 ? ((profit / totalCosts) * 100).toFixed(1) : "0.0";
 
     const tutorialSteps = [
-        "Consulta el balance operativo semanal en el gráfico principal.",
-        "Usa los botones de visibilidad para filtrar ingresos o costos.",
-        "El embudo de conversión te permite ver el rendimiento comercial.",
-        "Cambia los filtros en cada gráfica para un análisis más profundo."
+        "Consulta el balance operativo en tiempo real basado en cotizaciones aceptadas.",
+        "El Pipeline refleja el valor total de tus oportunidades abiertas.",
+        "Cuentas por Cobrar (CxC) muestra el flujo de efectivo pendiente de tus facturas.",
+        "Exporta este análisis a PDF para juntas de revisión de resultados."
     ];
 
     const CustomTooltip = ({ active, payload, label }) => {
@@ -64,13 +90,19 @@ const Metrics = () => {
         return null;
     };
 
+    if (loading) return (
+        <div style={{ height: '70vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Activity className="animate-spin" size={48} color="var(--purple-main)" />
+        </div>
+    );
+
     return (
         <div className="animate-fade printable-area" style={{ maxWidth: '1200px', margin: '0 auto' }}>
             {/* Header for PDF Generation */}
             <div className="print-only-header">
                 <div>
                     <h1 style={{ margin: 0, fontSize: '28px', color: '#7c3aed' }}>Análisis Ejecutivo de Inteligencia</h1>
-                    <p style={{ color: '#666', marginTop: '5px', fontSize: '14px' }}>Resumen Semanal de Operaciones • Diabolical</p>
+                    <p style={{ color: '#666', marginTop: '5px', fontSize: '14px' }}>Resumen Real de Operaciones • Diabolical</p>
                 </div>
                 <div style={{ textAlign: 'right' }}>
                     <img src={Logo} alt="Logo" style={{ width: '50px', height: '50px', marginBottom: '8px' }} />
@@ -84,7 +116,7 @@ const Metrics = () => {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                     <div>
                         <h1>Inteligencia de Negocio</h1>
-                        <p className="subtitle">Análisis avanzado de métricas y rendimiento</p>
+                        <p className="subtitle">Métricas reales extraídas de la base de datos operativa</p>
                     </div>
                     <ModuleTutorial
                         title="Métricas"
@@ -103,29 +135,29 @@ const Metrics = () => {
             <div className="glass-card executive-executive-summary" style={{ marginBottom: '1.5rem', padding: '2rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.5rem' }}>
                     <ClipboardList size={22} color="var(--purple-main)" />
-                    <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 600 }}>Resumen Ejecutivo Semanal</h3>
+                    <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 600 }}>Estado Financiero Consolidado</h3>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '1.2rem', marginBottom: '2rem' }}>
                     <div className="summary-item">
-                        <p style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '6px' }}>Ventas Totales</p>
-                        <h4 style={{ fontSize: '1.2rem', color: 'var(--purple-light)' }}>${totalSales.toLocaleString()}</h4>
+                        <p style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '6px' }}>Ventas Reales</p>
+                        <h4 style={{ fontSize: '1.2rem', color: 'var(--purple-light)', fontWeight: 800 }}>${metrics.quotes_accepted.toLocaleString()}</h4>
                     </div>
                     <div className="summary-item">
-                        <p style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '6px' }}>Costos Operativos</p>
-                        <h4 style={{ fontSize: '1.2rem', color: 'var(--error)' }}>${totalCosts.toLocaleString()}</h4>
+                        <p style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '6px' }}>Cuentas por Pagar</p>
+                        <h4 style={{ fontSize: '1.2rem', color: 'var(--error)', fontWeight: 800 }}>${metrics.cxp_pending.toLocaleString()}</h4>
                     </div>
                     <div className="summary-item">
-                        <p style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '6px' }}>Utilidad</p>
-                        <h4 style={{ fontSize: '1.2rem', color: 'var(--success)' }}>${profit.toLocaleString()}</h4>
+                        <p style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '6px' }}>CxC (Pendiente)</p>
+                        <h4 style={{ fontSize: '1.2rem', color: 'var(--text-primary)', fontWeight: 800 }}>${metrics.cxc_pending.toLocaleString()}</h4>
                     </div>
                     <div className="summary-item">
-                        <p style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '6px' }}>Margen Bruto</p>
-                        <h4 style={{ fontSize: '1.2rem' }}>{margin}%</h4>
+                        <p style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '6px' }}>Margen Real</p>
+                        <h4 style={{ fontSize: '1.2rem', fontWeight: 800 }}>{margin}%</h4>
                     </div>
                     <div className="summary-item">
-                        <p style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '6px' }}>ROI Semanal</p>
-                        <h4 style={{ fontSize: '1.2rem', color: 'var(--purple-main)' }}>{roi}%</h4>
+                        <p style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '6px' }}>Oportunidades (DEAL)</p>
+                        <h4 style={{ fontSize: '1.2rem', color: 'var(--purple-main)', fontWeight: 800 }}>${metrics.pipeline.toLocaleString()}</h4>
                     </div>
                 </div>
 
@@ -133,11 +165,12 @@ const Metrics = () => {
                     <div style={{ display: 'flex', gap: '12px' }}>
                         <Info size={18} style={{ marginTop: '3px', color: 'var(--purple-main)' }} />
                         <div>
-                            <p style={{ fontWeight: 600, fontSize: '0.9rem', marginBottom: '4px' }}>Interpretación de Rendimiento</p>
+                            <p style={{ fontWeight: 600, fontSize: '0.9rem', marginBottom: '4px' }}>Interpretación de Integridad Financiera</p>
                             <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: '1.6' }}>
-                                El **Retorno de Inversión (ROI) del {roi}%** indica una alta eficiencia en el uso del capital operativo durante esta semana.
-                                Por cada dólar invertido en costos, se generó un rendimiento significativo, superando el promedio proyectado para el trimestre.
-                                Se sugiere capitalizar esta liquidez para negociar mejores precios con proveedores en el módulo de Compras.
+                                {totalSales === 0 ? 
+                                    "El sistema se encuentra en una fase inicial sin ventas consolidadas. Los indicadores se actualizarán automáticamente conforme se acepten Cotizaciones y se registren Pagos." :
+                                    `Has generado un volumen de ventas aceptado de **$${totalSales.toLocaleString()}**. El balance entre las Cuentas por Cobrar y el Pipeline sugiere una proyección de crecimiento saludable para el cierre del ciclo.`
+                                }
                             </p>
                         </div>
                     </div>
@@ -145,102 +178,23 @@ const Metrics = () => {
             </div>
 
             <div className="metrics-content-flow" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                {/* Main Cash Flow Chart */}
-                <div className="glass-card" style={{ padding: '2rem' }}>
+                {/* Visual Chart Placeholders - Labeled as Projections */}
+                <div className="glass-card" style={{ padding: '2rem', opacity: 0.7 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
                         <h3 style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '10px', fontSize: '1.1rem' }}>
-                            <TrendingUp size={20} color="var(--purple-main)" /> Balance Semanal de Efectivo
+                            <TrendingUp size={20} color="var(--purple-main)" /> Proyección Semanal de Efectivo (Mockup)
                         </h3>
-                        <div className="no-print" style={{ display: 'flex', gap: '0.6rem' }}>
-                            <button
-                                className="btn-secondary"
-                                onClick={() => setVisibility({ ...visibility, sales: !visibility.sales })}
-                                style={{ fontSize: '0.75rem', display: 'flex', gap: '8px', alignItems: 'center', minWidth: '100px', justifyContent: 'center', borderColor: visibility.sales ? 'var(--purple-main)' : 'var(--glass-border)', padding: '0.5rem 1rem' }}
-                            >
-                                {visibility.sales ? <Eye size={14} /> : <EyeOff size={14} />} Ingresos
-                            </button>
-                            <button
-                                className="btn-secondary"
-                                onClick={() => setVisibility({ ...visibility, costs: !visibility.costs })}
-                                style={{ fontSize: '0.75rem', display: 'flex', gap: '8px', alignItems: 'center', minWidth: '100px', justifyContent: 'center', borderColor: visibility.costs ? 'var(--error)' : 'var(--glass-border)', padding: '0.5rem 1rem' }}
-                            >
-                                {visibility.costs ? <Eye size={14} /> : <EyeOff size={14} />} Costos
-                            </button>
-                        </div>
                     </div>
-
-                    <div style={{ height: '320px', width: '100%' }}>
+                    <div style={{ height: '320px', width: '100%', filter: 'grayscale(0.5)' }}>
                         <ResponsiveContainer width="100%" height="100%">
                             <AreaChart data={dataSales} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                                <defs>
-                                    <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="var(--purple-main)" stopOpacity={0.15} />
-                                        <stop offset="95%" stopColor="var(--purple-main)" stopOpacity={0} />
-                                    </linearGradient>
-                                    <linearGradient id="colorCosts" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="var(--error)" stopOpacity={0.1} />
-                                        <stop offset="95%" stopColor="var(--error)" stopOpacity={0} />
-                                    </linearGradient>
-                                </defs>
                                 <CartesianGrid strokeDasharray="3 3" stroke="var(--glass-border)" vertical={false} />
                                 <XAxis dataKey="name" stroke="var(--text-secondary)" fontSize={11} axisLine={false} tickLine={false} />
-                                <YAxis stroke="var(--text-secondary)" fontSize={11} axisLine={false} tickLine={false} tickFormatter={(val) => `$${val}`} />
+                                <YAxis stroke="var(--text-secondary)" fontSize={11} axisLine={false} tickLine={false} />
                                 <Tooltip content={<CustomTooltip />} />
-                                <Legend verticalAlign="top" height={36} iconType="circle" />
-                                {visibility.sales && (
-                                    <Area name="Ingresos" type="monotone" dataKey="sales" stroke="var(--purple-main)" strokeWidth={2.5} fill="url(#colorSales)" />
-                                )}
-                                {visibility.costs && (
-                                    <Area name="Costos" type="monotone" dataKey="costs" stroke="var(--error)" strokeWidth={2} fill="url(#colorCosts)" />
-                                )}
+                                <Area name="Tendencia" type="monotone" dataKey="sales" stroke="var(--purple-main)" strokeWidth={2.5} fillOpacity={0.1} />
                             </AreaChart>
                         </ResponsiveContainer>
-                    </div>
-                </div>
-
-                <div className="metrics-grid-container" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
-                    <div className="glass-card" style={{ padding: '1.8rem' }}>
-                        <h3 style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '10px', fontSize: '1rem', marginBottom: '1.5rem' }}>
-                            <BarChart3 size={18} color="var(--purple-main)" /> Desempeño Diario
-                        </h3>
-                        <div style={{ height: '260px', width: '100%' }}>
-                            <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={dataSales} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="var(--glass-border)" vertical={false} />
-                                    <XAxis dataKey="name" stroke="var(--text-secondary)" fontSize={11} axisLine={false} tickLine={false} />
-                                    <YAxis stroke="var(--text-secondary)" fontSize={11} axisLine={false} tickLine={false} />
-                                    <Tooltip content={<CustomTooltip />} />
-                                    {showBarSales && <Bar dataKey="sales" name="Ventas" fill="var(--purple-main)" radius={[4, 4, 0, 0]} barSize={18} />}
-                                </BarChart>
-                            </ResponsiveContainer>
-                        </div>
-                    </div>
-
-                    <div className="glass-card" style={{ padding: '1.8rem' }}>
-                        <h3 style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '10px', fontSize: '1rem', marginBottom: '1.5rem' }}>
-                            <Target size={18} color="var(--purple-main)" /> Conversión de Embudo
-                        </h3>
-                        <div style={{ height: '260px', width: '100%' }}>
-                            <ResponsiveContainer width="100%" height="100%">
-                                <PieChart>
-                                    <Pie
-                                        data={funnelFilter === 'all' ? dataConversion : dataConversion.filter(d => d.name === funnelFilter)}
-                                        cx="50%"
-                                        cy="45%"
-                                        innerRadius={55}
-                                        outerRadius={75}
-                                        paddingAngle={5}
-                                        dataKey="value"
-                                    >
-                                        {dataConversion.map((entry, index) => (
-                                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                        ))}
-                                    </Pie>
-                                    <Tooltip content={<CustomTooltip />} />
-                                    <Legend iconSize={8} wrapperStyle={{ fontSize: '10px', paddingTop: '15px' }} />
-                                </PieChart>
-                            </ResponsiveContainer>
-                        </div>
                     </div>
                 </div>
             </div>

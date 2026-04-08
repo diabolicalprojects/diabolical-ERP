@@ -5,18 +5,16 @@
     display: flex;
     gap: 1.5rem;
     overflow-x: auto;
-    padding-bottom: 2rem;
-    padding-right: 2rem; /* Give some space at the end */
+    overflow-y: hidden;
+    padding: 0 1rem 2rem 0;
     -webkit-overflow-scrolling: touch;
-    scroll-snap-type: x mandatory;
+    height: calc(100vh - 180px);
     width: 100%;
 }
 
 .pipeline-column {
-    min-width: 320px;
-    max-width: 320px;
-    scroll-snap-align: start;
-
+    min-width: 310px;
+    max-width: 310px;
     background: var(--bg-card);
     border-radius: 20px;
     /* Consistencia con .glass-card */

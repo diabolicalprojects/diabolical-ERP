@@ -13,28 +13,35 @@ import pool from './db.js';
 
 dotenv.config();
 
-const ENCRYPTION_KEY = process.env.ENCRYPTION_MASTER_KEY 
-    ? Buffer.from(process.env.ENCRYPTION_MASTER_KEY, 'hex') 
-    : crypto.randomBytes(32); // Fallback for dev, but in prod a real key must be provided
-const ALGO = 'aes-256-gcm';
+// Configuración de Cifrado (AES-256-GCM)
+const ENCRYPTION_ALGORITHM = 'aes-256-gcm';
+// Se espera una clave de 32 bytes (64 caracteres hex)
+const MASTER_KEY = Buffer.from(process.env.ENCRYPTION_MASTER_KEY || '6261c34a1795ca1202e70e289f664a781077977a41926b6438a2e1d6d84f981e', 'hex');
 
-const encryptText = (text) => {
-    const iv = crypto.randomBytes(12);
-    const cipher = crypto.createCipheriv(ALGO, ENCRYPTION_KEY, iv);
+const encryptPassword = (text) => {
+    const iv = crypto.randomBytes(16);
+    const cipher = crypto.createCipheriv(ENCRYPTION_ALGORITHM, MASTER_KEY, iv);
     let encrypted = cipher.update(text, 'utf8', 'hex');
     encrypted += cipher.final('hex');
     const authTag = cipher.getAuthTag().toString('hex');
-    return { encrypted, iv: iv.toString('hex'), authTag };
+    return {
+        encryptedPassword: encrypted,
+        iv: iv.toString('hex'),
+        authTag: authTag
+    };
 };
 
-const decryptText = (encrypted, ivHex, authTagHex) => {
-    const decipher = crypto.createDecipheriv(ALGO, ENCRYPTION_KEY, Buffer.from(ivHex, 'hex'));
-    decipher.setAuthTag(Buffer.from(authTagHex, 'hex'));
-    let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+const decryptPassword = (encryptedText, iv, authTag) => {
+    const decipher = crypto.createDecipheriv(
+        ENCRYPTION_ALGORITHM,
+        MASTER_KEY,
+        Buffer.from(iv, 'hex')
+    );
+    decipher.setAuthTag(Buffer.from(authTag, 'hex'));
+    let decrypted = decipher.update(encryptedText, 'hex', 'utf8');
     decrypted += decipher.final('utf8');
     return decrypted;
 };
-
 
 const app  = express();
 const PORT = process.env.PORT || 3001;
@@ -282,21 +289,14 @@ app.put('/api/customers/:id', authenticate, async (req, res) => {
     }
 });
 
-app.delete('/api/customers/:id', authenticate, async (req, res) => {
-    await pool.query('DELETE FROM customers WHERE id = $1', [req.params.id]);
-    auditLog(req, 'DELETE', 'customers', req.params.id);
-    res.json({ message: 'Cliente eliminado' });
-});
-
 // ─────────────────────────────────────────────
-// CLIENT CREDENTIALS VAULT
+// CLIENT CREDENTIALS (Vault)
 // ─────────────────────────────────────────────
-app.get('/api/customers/:id/credentials', authenticate, async (req, res) => {
+app.get('/api/clients/:clientId/credentials', authenticate, async (req, res) => {
     try {
         const { rows } = await pool.query(
-            `SELECT id, client_id, service_name, username, created_at, updated_at 
-             FROM client_credentials WHERE client_id = $1 ORDER BY created_at DESC`,
-            [req.params.id]
+            'SELECT id, service_name, username, created_at FROM client_credentials WHERE client_id = $1 ORDER BY created_at DESC',
+            [req.params.clientId]
         );
         res.json({ data: rows });
     } catch (err) {
@@ -304,50 +304,56 @@ app.get('/api/customers/:id/credentials', authenticate, async (req, res) => {
     }
 });
 
-app.post('/api/customers/:id/credentials', authenticate, requireAdmin, async (req, res) => {
-    const { service_name, username, password } = req.body;
-    if (!service_name || !password) return res.status(400).json({ error: 'Servicio y contraseña son requeridos' });
+app.post('/api/clients/:clientId/credentials', authenticate, async (req, res) => {
+    const { serviceName, username, password } = req.body;
+    if (!serviceName || !password) return res.status(400).json({ error: 'Servicio y contraseña requeridos' });
+
     try {
-        const { encrypted, iv, authTag } = encryptText(password);
+        const { encryptedPassword, iv, authTag } = encryptPassword(password);
         const { rows } = await pool.query(
-            `INSERT INTO client_credentials (client_id, service_name, username, encrypted_pass, iv, auth_tag)
-             VALUES ($1,$2,$3,$4,$5,$6) RETURNING id, client_id, service_name, username, created_at`,
-            [req.params.id, service_name, username, encrypted, iv, authTag]
+            `INSERT INTO client_credentials (client_id, service_name, username, encrypted_password, iv, auth_tag)
+             VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, service_name, username`,
+            [req.params.clientId, serviceName, username, encryptedPassword, iv, authTag]
         );
-        auditLog(req, 'CREATE', 'client_credentials', rows[0].id, { client_id: req.params.id, service: service_name });
+        auditLog(req, 'CREATE_CREDENTIAL', 'customers', req.params.clientId, { service: serviceName });
         res.status(201).json(rows[0]);
     } catch (err) {
         res.status(500).json({ error: 'Error interno', detail: err.message });
     }
 });
 
-app.get('/api/credentials/:id/reveal', authenticate, async (req, res) => {
+app.get('/api/credentials/:credentialId/reveal', authenticate, async (req, res) => {
     try {
         const { rows } = await pool.query(
-            `SELECT encrypted_pass, iv, auth_tag, client_id, service_name FROM client_credentials WHERE id = $1`,
-            [req.params.id]
+            'SELECT * FROM client_credentials WHERE id = $1',
+            [req.params.credentialId]
         );
-        if (!rows[0]) return res.status(404).json({ error: 'Credencial no encontrada' });
+        const cred = rows[0];
+        if (!cred) return res.status(404).json({ error: 'Credencial no encontrada' });
+
+        const password = decryptPassword(cred.encrypted_password, cred.iv, cred.auth_tag);
         
-        const decrypted = decryptText(rows[0].encrypted_pass, rows[0].iv, rows[0].auth_tag);
-        auditLog(req, 'REVEAL', 'client_credentials', req.params.id, { client_id: rows[0].client_id, service: rows[0].service_name });
+        auditLog(req, 'REVEAL_CREDENTIAL', 'customers', cred.client_id, { service: cred.service_name });
         
-        res.json({ password: decrypted });
+        res.json({ password });
+    } catch (err) {
+        res.status(500).json({ error: 'Error al desencriptar. Clave maestra inválida o datos corruptos.' });
+    }
+});
+
+app.delete('/api/credentials/:credentialId', authenticate, async (req, res) => {
+    try {
+        await pool.query('DELETE FROM client_credentials WHERE id = $1', [req.params.credentialId]);
+        res.json({ message: 'Credencial eliminada' });
     } catch (err) {
         res.status(500).json({ error: 'Error interno', detail: err.message });
     }
 });
 
-app.delete('/api/credentials/:id', authenticate, requireAdmin, async (req, res) => {
-    try {
-        const { rows } = await pool.query('DELETE FROM client_credentials WHERE id = $1 RETURNING client_id, service_name', [req.params.id]);
-        if (rows[0]) {
-            auditLog(req, 'DELETE', 'client_credentials', req.params.id, { client_id: rows[0].client_id, service: rows[0].service_name });
-        }
-        res.json({ message: 'Credencial eliminada' });
-    } catch (err) {
-        res.status(500).json({ error: 'Error interno', detail: err.message });
-    }
+app.delete('/api/customers/:id', authenticate, async (req, res) => {
+    await pool.query('DELETE FROM customers WHERE id = $1', [req.params.id]);
+    auditLog(req, 'DELETE', 'customers', req.params.id);
+    res.json({ message: 'Cliente eliminado' });
 });
 
 // ─────────────────────────────────────────────
@@ -1020,20 +1026,6 @@ app.put('/api/quote-settings', authenticate, requireAdmin, async (req, res) => {
             );
         }
         res.json(result.rows[0]);
-    } catch (err) {
-        res.status(500).json({ error: 'Error interno', detail: err.message });
-    }
-});
-
-// ─────────────────────────────────────────────
-// AUDIT LOGS
-// ─────────────────────────────────────────────
-app.get('/api/audit-logs', authenticate, requireAdmin, async (_req, res) => {
-    try {
-        const { rows } = await pool.query(
-            `SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT 200`
-        );
-        res.json({ data: rows });
     } catch (err) {
         res.status(500).json({ error: 'Error interno', detail: err.message });
     }

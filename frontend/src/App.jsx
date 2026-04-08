@@ -36,24 +36,13 @@ import Metrics from './components/Metrics/Metrics';
 import Purchases from './components/Purchases/Purchases';
 import Finances from './components/Finances/Finances';
 import Roles from './components/Roles/Roles';
-import AuditLogs from './components/Audit/AuditLogs';
 
 const Dashboard = () => {
     const { deals, projects, tracking, toggleTracking, receivables, payables } = useApp();
     const navigate = useNavigate();
 
-    const currentMonth = new Date().getMonth();
-    const currentYear = new Date().getFullYear();
-
     const pipelineValue = Object.values(deals).flat().reduce((acc, d) => acc + d.value, 0);
     const totalCxC = receivables.reduce((acc, r) => acc + (r.amount - r.paid), 0);
-    const ventasMes = receivables.reduce((acc, r) => {
-        const rDate = new Date(r.created_at || new Date());
-        if (rDate.getMonth() === currentMonth && rDate.getFullYear() === currentYear) {
-            return acc + Number(r.amount);
-        }
-        return acc;
-    }, 0);
 
     return (
         <div className="animate-fade">
@@ -74,7 +63,7 @@ const Dashboard = () => {
                     <div className="kpi-icon purple"><TrendingUp size={20} /></div>
                     <div className="kpi-info">
                         <span className="subtitle">Ventas Mes</span>
-                        <h2>${(ventasMes / 1000).toFixed(1)}k</h2>
+                        <h2>$128k</h2>
                     </div>
                 </div>
                 <div className="glass-card kpi-card">
@@ -148,11 +137,8 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
         { name: 'Compras', icon: <ShoppingBag size={20} />, path: '/compras' },
         { name: 'Finanzas', icon: <Wallet size={20} />, path: '/finanzas' },
         { name: 'Métricas', icon: <BarChart3 size={20} />, path: '/metricas' },
-        { name: 'Auditoría', icon: <BarChart3 size={20} />, path: '/audit', adminOnly: true },
-        { name: 'Seguridad', icon: <Shield size={20} />, path: '/seguridad', adminOnly: true },
+        { name: 'Seguridad', icon: <Shield size={20} />, path: '/seguridad' },
     ];
-
-    const filteredMenuItems = menuItems.filter(item => !item.adminOnly || user?.role === 'admin');
 
     return (
         <>
@@ -163,7 +149,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
                 </div>
 
                 <nav className="sidebar-nav">
-                    {filteredMenuItems.map((item) => (
+                    {menuItems.map((item) => (
                         <Link
                             key={item.path}
                             to={item.path}
@@ -307,7 +293,6 @@ const AppContent = () => {
                                     <Route path="/compras" element={<Purchases />} />
                                     <Route path="/finanzas" element={<Finances />} />
                                     <Route path="/metricas" element={<Metrics />} />
-                                    <Route path="/audit" element={user?.role === 'admin' ? <AuditLogs /> : <Navigate to="/" />} />
                                     <Route path="/seguridad" element={<Roles />} />
                                     <Route path="*" element={<Navigate to="/" replace />} />
                                 </Routes>

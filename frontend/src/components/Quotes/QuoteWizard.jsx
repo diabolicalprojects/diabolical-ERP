@@ -1,11 +1,10 @@
 import React, { useState } from 'react';
-import { X, Save, ShoppingBag, Plus, Trash2, Box, Briefcase, Zap, ClipboardList } from 'lucide-react';
+import { X, Save, ShoppingBag, Plus, Trash2, Box, Briefcase, Zap, ClipboardList, Settings, ChevronRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useApp } from '../../context/AppContext';
 
 const QuoteWizard = ({ isOpen, onClose }) => {
-    const { customers, inventory, services, quotePresets, addQuote, quotes } = useApp();
-
+    const { customers, inventory, services, quotePresets, setQuotes, quotes } = useApp();
     const [step, setStep] = useState(1);
     const [activeTab, setActiveTab] = useState('products'); // 'products', 'services', 'presets'
     const [formData, setFormData] = useState({
@@ -38,7 +37,7 @@ const QuoteWizard = ({ isOpen, onClose }) => {
         return formData.items.reduce((acc, item) => acc + (item.price * (item.quantity || 1)), 0);
     };
 
-    const handleFinish = async () => {
+    const handleFinish = () => {
         const newQuote = {
             id: `COT-${Date.now().toString().slice(-4)}`,
             customer: formData.customer,
@@ -47,17 +46,11 @@ const QuoteWizard = ({ isOpen, onClose }) => {
             date: new Date().toLocaleDateString(),
             status: 'sent'
         };
-        
-        try {
-            await addQuote(newQuote);
-            onClose();
-            setStep(1);
-            setFormData({ customer: '', items: [], status: 'sent' });
-        } catch (err) {
-            alert('Error al guardar la cotización');
-        }
+        setQuotes([newQuote, ...quotes]);
+        onClose();
+        setStep(1);
+        setFormData({ customer: '', items: [], status: 'sent' });
     };
-
 
     if (!isOpen) return null;
 
@@ -99,46 +92,44 @@ const QuoteWizard = ({ isOpen, onClose }) => {
                 </div>
 
                 {step === 1 ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
-                        <div style={{ flex: 1, overflowY: 'auto', marginBottom: '1.5rem', paddingRight: '10px' }}>
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1rem' }}>
-                                {customers.map(c => (
-                                    <button
-                                        key={c.id}
-                                        className={`glass-card item-card ${formData.customer === c.name ? 'selected' : ''}`}
-                                        style={{
-                                            textAlign: 'left',
-                                            padding: '1.2rem',
-                                            cursor: 'pointer',
-                                            background: formData.customer === c.name ? 'var(--text-primary)' : 'var(--glass)',
-                                            border: formData.customer === c.name ? '2px solid var(--text-primary)' : '1px solid var(--glass-border)',
-                                            transition: 'all 0.2s ease'
-                                        }}
-                                        onClick={() => setFormData({ ...formData, customer: c.name })}
-                                    >
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                                            <h4 style={{ margin: 0, color: formData.customer === c.name ? 'var(--bg-black)' : 'var(--text-primary)', fontWeight: 700 }}>{c.name}</h4>
-                                            <div style={{ width: '16px', height: '16px', borderRadius: '50%', border: '2px solid var(--bg-black)', background: formData.customer === c.name ? 'var(--text-primary)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                {formData.customer === c.name && <div style={{ width: '6px', height: '6px', background: 'var(--bg-black)', borderRadius: '50%' }} />}
-                                            </div>
+                    /* STEP 1: CUSTOMER SELECTION */
+                    <div style={{ flex: 1, overflowY: 'auto' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1rem' }}>
+                            {customers.map(c => (
+                                <button
+                                    key={c.id}
+                                    className={`glass-card item-card ${formData.customer === c.name ? 'selected' : ''}`}
+                                    style={{
+                                        textAlign: 'left',
+                                        padding: '1.2rem',
+                                        cursor: 'pointer',
+                                        background: formData.customer === c.name ? 'var(--text-primary)' : 'var(--glass)',
+                                        border: formData.customer === c.name ? '2px solid var(--text-primary)' : '1px solid var(--glass-border)',
+                                        transition: 'all 0.2s ease'
+                                    }}
+                                    onClick={() => setFormData({ ...formData, customer: c.name })}
+                                >
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                                        <h4 style={{ margin: 0, color: formData.customer === c.name ? 'var(--bg-black)' : 'var(--text-primary)', fontWeight: 700 }}>{c.name}</h4>
+                                        <div style={{ width: '16px', height: '16px', borderRadius: '50%', border: '2px solid var(--bg-black)', background: formData.customer === c.name ? 'var(--text-primary)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                            {formData.customer === c.name && <div style={{ width: '6px', height: '6px', background: 'var(--bg-black)', borderRadius: '50%' }} />}
                                         </div>
-                                        <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', opacity: 1, margin: 0, fontWeight: 500 }}>{c.email}</p>
-                                    </button>
-                                ))}
-                            </div>
+                                    </div>
+                                    <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', opacity: 1, margin: 0, fontWeight: 500 }}>{c.email}</p>
+                                </button>
+                            ))}
                         </div>
-                        <div style={{ padding: '1.5rem 0 0', borderTop: '1px solid var(--glass-border)', display: 'flex', justifyContent: 'flex-end' }}>
+                        <div style={{ marginTop: '2.5rem', display: 'flex', justifyContent: 'flex-end' }}>
                             <button
                                 className="btn-primary"
                                 disabled={!formData.customer}
                                 onClick={() => setStep(2)}
-                                style={{ padding: '1rem 3rem', fontSize: '1rem' }}
+                                style={{ padding: '0.8rem 2.5rem' }}
                             >
                                 Configurar Conceptos <Save size={18} style={{ marginLeft: '10px' }} />
                             </button>
                         </div>
                     </div>
-
                 ) : (
                     /* STEP 2: ITEMS SELECTION */
                     <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '2rem', flex: 1, overflow: 'hidden' }}>

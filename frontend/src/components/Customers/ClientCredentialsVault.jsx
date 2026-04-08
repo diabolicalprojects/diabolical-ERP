@@ -1,199 +1,223 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, Eye, EyeOff, Copy, Trash2, Plus, Key, Lock, Check } from 'lucide-react';
-import { useApp } from '../../context/AppContext';
+import { X, Shield, Key, Eye, EyeOff, Trash2, Plus, Loader, Copy, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const ClientCredentialsVault = ({ client, onClose }) => {
-    const { getClientCredentials, addClientCredential, revealCredential, deleteClientCredential, userRole } = useApp();
+const ClientCredentialsVault = ({ isOpen, onClose, clientId, clientName }) => {
     const [credentials, setCredentials] = useState([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [revealed, setRevealed] = useState({}); // { id: password }
-    const [copying, setCopying] = useState(null);
+    const [loading, setLoading] = useState(false);
     const [isAdding, setIsAdding] = useState(false);
-    const [newCred, setNewCred] = useState({ service_name: '', username: '', password: '' });
+    const [revealing, setRevealing] = useState(null); // id of credential being revealed
+    const [copied, setCopied] = useState(null);
 
-    const fetchCreds = async () => {
-        setIsLoading(true);
+    const [newCred, setNewCred] = useState({
+        service_name: '',
+        username: '',
+        password_plain: '',
+        notes: ''
+    });
+
+    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+
+    const fetchCredentials = async () => {
+        if (!clientId) return;
+        setLoading(true);
         try {
-            const data = await getClientCredentials(client.id);
+            const res = await fetch(`${API_URL}/api/clients/${clientId}/credentials`);
+            const data = await res.json();
             setCredentials(data);
-        } catch (err) {
-            console.error(err);
+        } catch (error) {
+            console.error('Error fetching credentials:', error);
         } finally {
-            setIsLoading(false);
+            setLoading(false);
         }
     };
 
     useEffect(() => {
-        fetchCreds();
-    }, [client.id]);
+        if (isOpen && clientId) {
+            fetchCredentials();
+        }
+    }, [isOpen, clientId]);
+
+    const handleCreate = async (e) => {
+        e.preventDefault();
+        try {
+            const res = await fetch(`${API_URL}/api/clients/${clientId}/credentials`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(newCred)
+            });
+            if (res.ok) {
+                setIsAdding(false);
+                setNewCred({ service_name: '', username: '', password_plain: '', notes: '' });
+                fetchCredentials();
+            }
+        } catch (error) {
+            console.error('Error creating credential:', error);
+        }
+    };
 
     const handleReveal = async (id) => {
-        if (revealed[id]) {
-            const newRevealed = { ...revealed };
-            delete newRevealed[id];
-            setRevealed(newRevealed);
-            return;
-        }
+        setRevealing(id);
         try {
-            const password = await revealCredential(id);
-            setRevealed({ ...revealed, [id]: password });
-            
-            // Auto-hide after 30 seconds for security
-            setTimeout(() => {
-                setRevealed(prev => {
-                    const next = { ...prev };
-                    delete next[id];
-                    return next;
-                });
-            }, 30000);
-        } catch (err) {
-            alert('Error al revelar contraseña. Verifica tus permisos.');
-        }
-    };
-
-    const handleCopy = (text, id) => {
-        navigator.clipboard.writeText(text);
-        setCopying(id);
-        setTimeout(() => setCopying(null), 2000);
-    };
-
-    const handleAdd = async () => {
-        if (!newCred.service_name || !newCred.password) return;
-        try {
-            await addClientCredential(client.id, newCred);
-            setNewCred({ service_name: '', username: '', password: '' });
-            setIsAdding(false);
-            fetchCreds();
-        } catch (err) {
-            alert('Error al guardar credencial.');
+            const res = await fetch(`${API_URL}/api/credentials/${id}/reveal`);
+            const data = await res.json();
+            if (data.password) {
+                setCredentials(prev => prev.map(c => 
+                    c.credential_id === id ? { ...c, revealedPassword: data.password } : c
+                ));
+            }
+        } catch (error) {
+            console.error('Error revealing password:', error);
+        } finally {
+            setRevealing(null);
         }
     };
 
     const handleDelete = async (id) => {
-        if (!window.confirm('¿Estás seguro de eliminar esta credencial permanentemente?')) return;
+        if (!window.confirm('¿Estás seguro de eliminar esta credencial?')) return;
         try {
-            await deleteClientCredential(id);
-            fetchCreds();
-        } catch (err) {
-            alert('Error al eliminar.');
+            const res = await fetch(`${API_URL}/api/credentials/${id}`, {
+                method: 'DELETE'
+            });
+            if (res.ok) {
+                fetchCredentials();
+            }
+        } catch (error) {
+            console.error('Error deleting credential:', error);
         }
     };
 
+    const copyToClipboard = (text, id) => {
+        navigator.clipboard.writeText(text);
+        setCopied(id);
+        setTimeout(() => setCopied(null), 2000);
+    };
+
+    if (!isOpen) return null;
+
     return (
-        <div className="vault-panel" style={{ padding: '1rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <div className="kpi-icon violet" style={{ width: '32px', height: '32px' }}><Shield size={16} /></div>
-                    <h3 style={{ fontSize: '1.1rem' }}>Bóveda de Credenciales</h3>
-                </div>
-                {userRole === 'admin' && (
-                    <button className="btn-primary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }} onClick={() => setIsAdding(!isAdding)}>
-                        <Plus size={14} /> {isAdding ? 'Cancelar' : 'Nueva'}
-                    </button>
-                )}
-            </div>
-
-            <AnimatePresence>
-                {isAdding && (
-                    <motion.div 
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0, scale: 0.95 }}
-                        className="glass-card" 
-                        style={{ marginBottom: '1.5rem', padding: '1rem', border: '1px solid var(--purple-main)' }}
-                    >
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                            <input 
-                                placeholder="Servicio (ej: AWS, Shopify, DB)" 
-                                value={newCred.service_name} 
-                                onChange={e => setNewCred({...newCred, service_name: e.target.value})}
-                                style={{ width: '100%' }}
-                            />
-                            <input 
-                                placeholder="Usuario / Email" 
-                                value={newCred.username} 
-                                onChange={e => setNewCred({...newCred, username: e.target.value})}
-                                style={{ width: '100%' }}
-                            />
-                            <input 
-                                type="password" 
-                                placeholder="Contraseña" 
-                                value={newCred.password} 
-                                onChange={e => setNewCred({...newCred, password: e.target.value})}
-                                style={{ width: '100%' }}
-                            />
-                            <button className="btn-primary" onClick={handleAdd} style={{ width: '100%', marginTop: '5px' }}>
-                                <Lock size={14} /> Cifrar y Guardar
-                            </button>
+        <div className="modal-overlay modal-center" onClick={onClose} style={{ zIndex: 11000 }}>
+            <motion.div
+                initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                className="modal-content-centered glass-card"
+                style={{ maxWidth: '650px', width: '95%', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}
+                onClick={e => e.stopPropagation()}
+            >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div style={{ background: '#7c3aed', padding: '10px', borderRadius: '12px', color: 'white' }}>
+                            <Shield size={24} />
                         </div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
-
-            {isLoading ? (
-                <p className="subtitle" style={{ textAlign: 'center', padding: '2rem' }}>Auditando bóveda...</p>
-            ) : credentials.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '3rem 1rem', opacity: 0.5 }}>
-                    <Key size={40} style={{ marginBottom: '1rem' }} />
-                    <p>No hay credenciales guardadas para este cliente.</p>
+                        <div>
+                            <h2 style={{ fontSize: '1.25rem', margin: 0 }}>Bóveda de Credenciales</h2>
+                            <p className="subtitle" style={{ margin: 0 }}>{clientName || 'Cliente'}</p>
+                        </div>
+                    </div>
+                    <button className="icon-btn" onClick={onClose}><X /></button>
                 </div>
-            ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                    {credentials.map(c => (
-                        <div key={c.id} className="glass-card" style={{ padding: '12px', background: 'rgba(255,255,255,0.03)' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-                                <div>
-                                    <span style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--purple-main)' }}>{c.service_name}</span>
-                                    <p style={{ fontSize: '0.8rem', opacity: 0.7 }}>{c.username || 'N/A'}</p>
+
+                <div style={{ flex: 1, overflowY: 'auto', paddingRight: '10px', marginBottom: '1.5rem' }}>
+                    {isAdding ? (
+                        <form onSubmit={handleCreate} style={{ display: 'flex', flexDirection: 'column', gap: '1rem', background: 'rgba(255,255,255,0.03)', padding: '1.5rem', borderRadius: '16px', border: '1px solid var(--glass-border)' }}>
+                            <h3 style={{ fontSize: '1rem', marginBottom: '0.5rem' }}>Nueva Credencial</h3>
+                            <div className="input-group">
+                                <label>Servicio (ej. Hosting, DB, Correo)</label>
+                                <input required value={newCred.service_name} onChange={e => setNewCred({ ...newCred, service_name: e.target.value })} placeholder="Ej. AWS, GoDaddy..." />
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                <div className="input-group">
+                                    <label>Usuario / Email</label>
+                                    <input required value={newCred.username} onChange={e => setNewCred({ ...newCred, username: e.target.value })} placeholder="admin@example.com" />
                                 </div>
-                                <div style={{ display: 'flex', gap: '8px' }}>
-                                    <button 
-                                        onClick={() => handleReveal(c.id)}
-                                        style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}
-                                        title={revealed[c.id] ? "Ocultar" : "Revelar"}
-                                    >
-                                        {revealed[c.id] ? <EyeOff size={16} /> : <Eye size={16} />}
-                                    </button>
-                                    {userRole === 'admin' && (
-                                        <button 
-                                            onClick={() => handleDelete(c.id)}
-                                            style={{ background: 'none', border: 'none', color: 'var(--error)', cursor: 'pointer', opacity: 0.6 }}
-                                        >
-                                            <Trash2 size={16} />
-                                        </button>
-                                    )}
+                                <div className="input-group">
+                                    <label>Contraseña</label>
+                                    <input required type="password" value={newCred.password_plain} onChange={e => setNewCred({ ...newCred, password_plain: e.target.value })} placeholder="••••••••" />
                                 </div>
                             </div>
-                            
-                            <div style={{ 
-                                background: 'rgba(0,0,0,0.2)', 
-                                padding: '8px 12px', 
-                                borderRadius: '8px', 
-                                display: 'flex', 
-                                justifyContent: 'space-between', 
-                                alignItems: 'center',
-                                border: '1px solid rgba(255,255,255,0.05)'
-                            }}>
-                                <code style={{ fontSize: '0.85rem', letterSpacing: revealed[c.id] ? '0' : '0.3em' }}>
-                                    {revealed[c.id] ? revealed[c.id] : '••••••••••••'}
-                                </code>
-                                {revealed[c.id] && (
-                                    <button 
-                                        onClick={() => handleCopy(revealed[c.id], c.id)}
-                                        style={{ background: 'none', border: 'none', color: copying === c.id ? 'var(--success)' : 'var(--purple-main)', cursor: 'pointer', padding: '4px' }}
-                                    >
-                                        {copying === c.id ? <Check size={14} /> : <Copy size={14} />}
-                                    </button>
-                                )}
+                            <div className="input-group">
+                                <label>Notas Adicionales</label>
+                                <input value={newCred.notes} onChange={e => setNewCred({ ...newCred, notes: e.target.value })} placeholder="URL de acceso, IP, etc." />
                             </div>
-                            <span style={{ fontSize: '0.65rem', opacity: 0.3, marginTop: '8px', display: 'block' }}>
-                                Actualizado: {new Date(c.updated_at).toLocaleDateString()}
-                            </span>
+                            <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
+                                <button type="button" className="btn-secondary" style={{ flex: 1 }} onClick={() => setIsAdding(false)}>Cancelar</button>
+                                <button type="submit" className="btn-primary" style={{ flex: 1 }}>Guardar en Bóveda</button>
+                            </div>
+                        </form>
+                    ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span style={{ fontSize: '0.85rem', opacity: 0.6 }}>{credentials.length} credenciales almacenadas</span>
+                                <button className="btn-primary" style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }} onClick={() => setIsAdding(true)}>
+                                    <Plus size={16} /> Agregar Nueva
+                                </button>
+                            </div>
+
+                            {loading ? (
+                                <div style={{ display: 'flex', justifyContent: 'center', padding: '3rem' }}>
+                                    <Loader className="animate-spin" />
+                                </div>
+                            ) : credentials.length === 0 ? (
+                                <div style={{ textAlign: 'center', padding: '4rem 1rem', opacity: 0.3 }}>
+                                    <Key size={48} style={{ marginBottom: '1rem' }} />
+                                    <p>No hay credenciales registradas para este cliente.</p>
+                                </div>
+                            ) : (
+                                credentials.map(c => (
+                                    <div key={c.credential_id} className="glass-card" style={{ padding: '1.25rem', border: '1px solid var(--glass-border)' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                            <div>
+                                                <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                    {c.service_name}
+                                                    <span style={{ fontSize: '0.7rem', background: 'rgba(124, 58, 237, 0.1)', color: '#a78bfa', padding: '2px 6px', borderRadius: '4px' }}>Cifrado AES-256</span>
+                                                </h4>
+                                                <p style={{ fontSize: '0.9rem', margin: '4px 0', opacity: 0.8 }}><strong>Usuario:</strong> {c.username}</p>
+                                                {c.notes && <p style={{ fontSize: '0.8rem', opacity: 0.5, margin: 0 }}>{c.notes}</p>}
+                                            </div>
+                                            <button className="icon-btn" style={{ color: 'var(--error)' }} onClick={() => handleDelete(c.credential_id)}>
+                                                <Trash2 size={16} />
+                                            </button>
+                                        </div>
+
+                                        <div style={{ marginTop: '1rem', display: 'flex', alignItems: 'center', gap: '1rem', background: 'var(--bg-black)', padding: '0.75rem', borderRadius: '10px', border: '1px solid var(--glass-border)' }}>
+                                            <div style={{ flex: 1, fontFamily: 'monospace', letterSpacing: '0.1em', fontSize: '0.9rem' }}>
+                                                {c.revealedPassword ? c.revealedPassword : '••••••••••••••••'}
+                                            </div>
+                                            <div style={{ display: 'flex', gap: '8px' }}>
+                                                {c.revealedPassword ? (
+                                                    <>
+                                                        <button 
+                                                            className="icon-btn" 
+                                                            onClick={() => copyToClipboard(c.revealedPassword, c.credential_id)}
+                                                            style={{ color: copied === c.credential_id ? '#10b981' : 'inherit' }}
+                                                        >
+                                                            {copied === c.credential_id ? <Check size={16} /> : <Copy size={16} />}
+                                                        </button>
+                                                        <button className="icon-btn" onClick={() => setCredentials(prev => prev.map(item => item.credential_id === c.credential_id ? { ...item, revealedPassword: null } : item))}>
+                                                            <EyeOff size={16} />
+                                                        </button>
+                                                    </>
+                                                ) : (
+                                                    <button className="icon-btn" onClick={() => handleReveal(c.credential_id)} disabled={revealing === c.credential_id}>
+                                                        {revealing === c.credential_id ? <Loader size={16} className="animate-spin" /> : <Eye size={16} />}
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))
+                            )}
                         </div>
-                    ))}
+                    )}
                 </div>
-            )}
+
+                <div style={{ background: 'rgba(124, 58, 237, 0.05)', padding: '1rem', borderRadius: '12px', border: '1px solid rgba(124, 58, 237, 0.15)', display: 'flex', gap: '12px' }}>
+                    <Shield size={20} style={{ color: '#7c3aed', flexShrink: 0 }} />
+                    <p style={{ fontSize: '0.75rem', opacity: 0.8, margin: 0, lineHeight: 1.4 }}>
+                        <strong>Seguridad Nivel Bancario:</strong> Todas las contraseñas se cifran con <strong>AES-256-GCM</strong> antes de guardarse. Solo el servidor puede descifrarlas bajo demanda. Cada acceso es auditado.
+                    </p>
+                </div>
+            </motion.div>
         </div>
     );
 };

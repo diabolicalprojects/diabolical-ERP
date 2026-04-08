@@ -31,12 +31,23 @@ const pool = new Pool({
 async function seed() {
     const client = await pool.connect();
     try {
-        console.log('\n🔧 Aplicando schema...\n');
+        console.log('\n🔧 Realizando limpieza total y aplicando schema...\n');
 
+        // --- Safety Lock ---
+        if (!process.argv.includes('--force-reset')) {
+            console.error('\n🛑 ERROR: Esta es una operación DESTRUCTIVA.');
+            console.error('Para limpiar la base de datos y empezar de cero, ejecuta:');
+            console.error('   node seed.js --force-reset\n');
+            process.exit(1);
+        }
+
+        // --- Hard Reset ---
+        await client.query(`DROP SCHEMA public CASCADE; CREATE SCHEMA public; GRANT ALL ON SCHEMA public TO public; COMMENT ON SCHEMA public IS 'standard public schema';`);
+        
         // --- Apply schema ---
         const schemaSQL = readFileSync(join(__dirname, 'schema.sql'), 'utf-8');
         await client.query(schemaSQL);
-        console.log('✅ Schema aplicado correctamente.');
+        console.log('✅ Base de datos limpia y schema aplicado correctamente.');
 
         // --- Create admin user ---
         const adminEmail    = process.env.ADMIN_EMAIL    || 'admin@diabolical.ai';
