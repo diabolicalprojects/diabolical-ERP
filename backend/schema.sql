@@ -90,6 +90,17 @@ CREATE TABLE IF NOT EXISTS purchases (
     updated_at   TIMESTAMPTZ   NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS purchase_items (
+    id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    purchase_id  UUID NOT NULL REFERENCES purchases(id) ON DELETE CASCADE,
+    item_ref_id  UUID, -- Reference to inventory.id
+    name         VARCHAR(200) NOT NULL,
+    price        NUMERIC(14,2) NOT NULL DEFAULT 0,
+    quantity     INT NOT NULL DEFAULT 1
+);
+
+CREATE INDEX IF NOT EXISTS idx_purchase_items_purchase ON purchase_items(purchase_id);
+
 -- ============================================================
 -- DEALS (Pipeline CRM)
 -- ============================================================
@@ -234,3 +245,20 @@ CREATE INDEX IF NOT EXISTS idx_inventory_status       ON inventory(status);
 CREATE INDEX IF NOT EXISTS idx_purchases_status       ON purchases(status);
 CREATE INDEX IF NOT EXISTS idx_quote_items_quote      ON quote_items(quote_id);
 CREATE INDEX IF NOT EXISTS idx_preset_items_preset    ON quote_preset_items(preset_id);
+
+-- ============================================================
+-- AUDIT LOGS
+-- ============================================================
+CREATE TABLE IF NOT EXISTS audit_logs (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id     UUID REFERENCES users(id) ON DELETE SET NULL,
+    user_name   VARCHAR(120),
+    action      VARCHAR(50) NOT NULL, -- CREATE | UPDATE | DELETE | LOGIN
+    resource    VARCHAR(50) NOT NULL, -- customers | inventory | quotes | etc
+    resource_id UUID,
+    details     JSONB,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_logs_user     ON audit_logs(user_id);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_resource ON audit_logs(resource, resource_id);

@@ -68,7 +68,21 @@ const paginatedQuery = async (res, sql, params = [], countSql = null, countParam
         res.json({ data: rows });
     } catch (err) {
         console.error(err);
-        res.status(500).json({ error: 'Error interno del servidor', detail: err.message });
+    }
+};
+
+// ─────────────────────────────────────────────
+// Helper: Audit Logging
+// ─────────────────────────────────────────────
+const auditLog = async (req, action, resource, resourceId, details = null) => {
+    try {
+        await pool.query(
+            `INSERT INTO audit_logs (user_id, user_name, action, resource, resource_id, details)
+             VALUES ($1, $2, $3, $4, $5, $6)`,
+            [req.user?.id, req.user?.name, action, resource, resourceId, details]
+        );
+    } catch (err) {
+        console.error('Audit Log Error:', err.message);
     }
 };
 
@@ -113,6 +127,9 @@ app.post('/api/auth/login', async (req, res) => {
             token,
             user: { id: user.id, name: user.name, email: user.email, role: user.role }
         });
+
+        // Audit login
+        auditLog({ user }, 'LOGIN', 'users', user.id);
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Error interno', detail: err.message });
@@ -143,6 +160,7 @@ app.post('/api/users', authenticate, requireAdmin, async (req, res) => {
              RETURNING id, name, email, role, is_active, created_at`,
             [name, email, hash, role]
         );
+        auditLog(req, 'CREATE', 'users', rows[0].id, { email, role });
         res.status(201).json(rows[0]);
     } catch (err) {
         if (err.code === '23505') return res.status(409).json({ error: 'Email ya registrado' });
@@ -164,6 +182,7 @@ app.patch('/api/users/:id', authenticate, requireAdmin, async (req, res) => {
             [name, role, is_active, req.params.id]
         );
         if (!rows[0]) return res.status(404).json({ error: 'Usuario no encontrado' });
+        auditLog(req, 'UPDATE', 'users', req.params.id, { name, role, is_active });
         res.json(rows[0]);
     } catch (err) {
         res.status(500).json({ error: 'Error interno', detail: err.message });
@@ -184,6 +203,7 @@ app.delete('/api/users/:id', authenticate, requireAdmin, async (req, res) => {
             return res.status(400).json({ error: 'No puedes eliminar el único administrador' });
         }
         await pool.query('DELETE FROM users WHERE id = $1', [req.params.id]);
+        auditLog(req, 'DELETE', 'users', req.params.id);
         res.json({ message: 'Usuario eliminado' });
     } catch (err) {
         res.status(500).json({ error: 'Error interno', detail: err.message });
@@ -206,6 +226,7 @@ app.post('/api/customers', authenticate, async (req, res) => {
              VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
             [name, contact, phone, email, address, alt_contact, status || 'activo']
         );
+        auditLog(req, 'CREATE', 'customers', rows[0].id, { name });
         res.status(201).json(rows[0]);
     } catch (err) {
         res.status(500).json({ error: 'Error interno', detail: err.message });
@@ -230,6 +251,7 @@ app.put('/api/customers/:id', authenticate, async (req, res) => {
             [name, contact, phone, email, address, alt_contact, deals, status, req.params.id]
         );
         if (!rows[0]) return res.status(404).json({ error: 'Cliente no encontrado' });
+        auditLog(req, 'UPDATE', 'customers', req.params.id, { name, status });
         res.json(rows[0]);
     } catch (err) {
         res.status(500).json({ error: 'Error interno', detail: err.message });
@@ -238,6 +260,7 @@ app.put('/api/customers/:id', authenticate, async (req, res) => {
 
 app.delete('/api/customers/:id', authenticate, async (req, res) => {
     await pool.query('DELETE FROM customers WHERE id = $1', [req.params.id]);
+    auditLog(req, 'DELETE', 'customers', req.params.id);
     res.json({ message: 'Cliente eliminado' });
 });
 
@@ -303,6 +326,7 @@ app.post('/api/inventory', authenticate, async (req, res) => {
              VALUES ($1,$2,$3,$4,$5) RETURNING *`,
             [name, sku, price || 0, stock || 0, status || 'ok']
         );
+        auditLog(req, 'CREATE', 'inventory', rows[0].id, { sku, stock });
         res.status(201).json(rows[0]);
     } catch (err) {
         if (err.code === '23505') return res.status(409).json({ error: 'SKU ya registrado' });
@@ -325,6 +349,7 @@ app.put('/api/inventory/:id', authenticate, async (req, res) => {
             [name, sku, price, stock, status, req.params.id]
         );
         if (!rows[0]) return res.status(404).json({ error: 'Producto no encontrado' });
+        auditLog(req, 'UPDATE', 'inventory', req.params.id, { sku, stock, status });
         res.json(rows[0]);
     } catch (err) {
         res.status(500).json({ error: 'Error interno', detail: err.message });
@@ -333,6 +358,7 @@ app.put('/api/inventory/:id', authenticate, async (req, res) => {
 
 app.delete('/api/inventory/:id', authenticate, async (req, res) => {
     await pool.query('DELETE FROM inventory WHERE id = $1', [req.params.id]);
+    auditLog(req, 'DELETE', 'inventory', req.params.id);
     res.json({ message: 'Producto eliminado' });
 });
 
@@ -394,32 +420,74 @@ app.get('/api/purchases', authenticate, async (_req, res) => {
 });
 
 app.post('/api/purchases', authenticate, async (req, res) => {
-    const { purchase_no, vendor_id, vendor_name, total, status, date } = req.body;
+    const { purchase_no, vendor_id, vendor_name, total, status, date, items = [] } = req.body;
     if (!purchase_no) return res.status(400).json({ error: 'Número de orden requerido' });
+    const client = await pool.connect();
     try {
-        const { rows } = await pool.query(
+        await client.query('BEGIN');
+        const { rows } = await client.query(
             `INSERT INTO purchases (purchase_no, vendor_id, vendor_name, total, status, date)
              VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
             [purchase_no, vendor_id, vendor_name, total || 0, status || 'pendiente', date || new Date()]
         );
-        res.status(201).json(rows[0]);
+        const purchase = rows[0];
+        
+        for (const item of items) {
+            await client.query(
+                `INSERT INTO purchase_items (purchase_id, item_ref_id, name, price, quantity)
+                 VALUES ($1, $2, $3, $4, $5)`,
+                [purchase.id, item.item_ref_id, item.name, item.price, item.quantity]
+            );
+        }
+        
+        await client.query('COMMIT');
+        auditLog(req, 'CREATE', 'purchases', purchase.id, { purchase_no, items_count: items.length });
+        res.status(201).json(purchase);
     } catch (err) {
+        await client.query('ROLLBACK');
         if (err.code === '23505') return res.status(409).json({ error: 'Número de orden duplicado' });
         res.status(500).json({ error: 'Error interno', detail: err.message });
+    } finally {
+        client.release();
     }
 });
 
 app.patch('/api/purchases/:id/receive', authenticate, async (req, res) => {
+    const client = await pool.connect();
     try {
-        const { rows } = await pool.query(
+        await client.query('BEGIN');
+        
+        // Verificar si ya fue recibida
+        const { rows: check } = await client.query('SELECT status FROM purchases WHERE id = $1', [req.params.id]);
+        if (!check.length) return res.status(404).json({ error: 'Orden no encontrada' });
+        if (check[0].status === 'recibido') return res.status(400).json({ error: 'La orden ya fue recibida previamente' });
+
+        const { rows } = await client.query(
             `UPDATE purchases SET status = 'recibido', updated_at = NOW()
              WHERE id = $1 RETURNING *`,
             [req.params.id]
         );
-        if (!rows[0]) return res.status(404).json({ error: 'Orden no encontrada' });
-        res.json(rows[0]);
+        const purchase = rows[0];
+
+        // Sincronizar inventario
+        const { rows: items } = await client.query('SELECT * FROM purchase_items WHERE purchase_id = $1', [purchase.id]);
+        for (const item of items) {
+            if (item.item_ref_id) {
+                await client.query(
+                    `UPDATE inventory SET stock = stock + $1, updated_at = NOW() WHERE id = $2`,
+                    [item.quantity, item.item_ref_id]
+                );
+            }
+        }
+
+        await client.query('COMMIT');
+        auditLog(req, 'RECEIVE', 'purchases', purchase.id, { purchase_no: purchase.purchase_no });
+        res.json(purchase);
     } catch (err) {
+        await client.query('ROLLBACK');
         res.status(500).json({ error: 'Error interno', detail: err.message });
+    } finally {
+        client.release();
     }
 });
 
@@ -601,18 +669,31 @@ app.patch('/api/receivables/:id/pay', authenticate, async (req, res) => {
     const { amount } = req.body;
     if (!amount || amount <= 0) return res.status(400).json({ error: 'Monto inválido' });
     try {
+        // Validación de negocio contra sobrepagos
+        const { rows: current } = await pool.query('SELECT amount, paid, status FROM receivables WHERE id = $1', [req.params.id]);
+        if (!current.length) return res.status(404).json({ error: 'Factura no encontrada' });
+        
+        const invoice = current[0];
+        const remaining = Number(invoice.amount) - Number(invoice.paid);
+        
+        if (amount > remaining) {
+            return res.status(400).json({ error: `El abono excede el saldo pendiente (${remaining})` });
+        }
+
         const { rows } = await pool.query(
             `UPDATE receivables SET
-                paid = LEAST(paid + $1, amount),
+                paid = paid + $1,
                 status = CASE
                     WHEN (paid + $1) >= amount THEN 'pagado'
+                    WHEN status = 'vencido' THEN 'vencido'
                     WHEN (paid + $1) > 0 THEN 'parcial'
                     ELSE status END,
                 updated_at = NOW()
              WHERE id = $2 RETURNING *`,
             [amount, req.params.id]
         );
-        if (!rows[0]) return res.status(404).json({ error: 'Factura no encontrada' });
+        
+        auditLog(req, 'UPDATE', 'receivables', req.params.id, { payment_amount: amount, new_balance: rows[0].amount - rows[0].paid });
         res.json(rows[0]);
     } catch (err) {
         res.status(500).json({ error: 'Error interno', detail: err.message });
