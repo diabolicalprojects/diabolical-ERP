@@ -142,7 +142,14 @@ const QuoteSettings = ({ isOpen, onClose }) => {
                 </div>
 
                 <div style={{ marginTop: '2.5rem', display: 'flex', gap: '1rem' }}>
-                    <button className="btn-primary" style={{ flex: 1 }} onClick={onClose}>
+                    <button className="btn-primary" style={{ flex: 1 }} onClick={async () => {
+                        try {
+                            await saveQuoteSettings(quoteSettings);
+                            onClose();
+                        } catch (err) {
+                            alert('Error al guardar la configuración');
+                        }
+                    }}>
                         <Save size={18} /> Guardar Configuración
                     </button>
                 </div>

@@ -3,6 +3,8 @@ import { Search, Plus, User, Phone, Mail, X, Trash2 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import ModuleTutorial from '../Common/ModuleTutorial';
+import ClientCredentialsVault from './ClientCredentialsVault';
+
 
 const Customers = () => {
     const { customers, customerStatuses, addCustomer, updateCustomer, deleteCustomer } = useApp();
@@ -150,7 +152,7 @@ const Customers = () => {
                                     )}
                                 </div>
 
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
                                     <div className="glass-card" style={{ textAlign: 'center' }}>
                                         <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Tratos</p>
                                         <h4>{selectedClient.deals}</h4>
@@ -161,7 +163,11 @@ const Customers = () => {
                                     </div>
                                 </div>
 
+                                {/* Bóveda de Credenciales */}
+                                <ClientCredentialsVault client={selectedClient} />
+
                                 <div style={{ marginTop: '2.5rem', display: 'flex', gap: '1rem' }}>
+
                                     <button className="btn-secondary" style={{ flex: 1, color: 'var(--error)' }} onClick={() => { deleteCustomer(selectedClient.id); setSelectedClient(null); }}>
                                         <Trash2 size={18} /> Eliminar
                                     </button>

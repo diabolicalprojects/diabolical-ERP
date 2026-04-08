@@ -8,9 +8,33 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import pool from './db.js';
 
 dotenv.config();
+
+const ENCRYPTION_KEY = process.env.ENCRYPTION_MASTER_KEY 
+    ? Buffer.from(process.env.ENCRYPTION_MASTER_KEY, 'hex') 
+    : crypto.randomBytes(32); // Fallback for dev, but in prod a real key must be provided
+const ALGO = 'aes-256-gcm';
+
+const encryptText = (text) => {
+    const iv = crypto.randomBytes(12);
+    const cipher = crypto.createCipheriv(ALGO, ENCRYPTION_KEY, iv);
+    let encrypted = cipher.update(text, 'utf8', 'hex');
+    encrypted += cipher.final('hex');
+    const authTag = cipher.getAuthTag().toString('hex');
+    return { encrypted, iv: iv.toString('hex'), authTag };
+};
+
+const decryptText = (encrypted, ivHex, authTagHex) => {
+    const decipher = crypto.createDecipheriv(ALGO, ENCRYPTION_KEY, Buffer.from(ivHex, 'hex'));
+    decipher.setAuthTag(Buffer.from(authTagHex, 'hex'));
+    let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
+    return decrypted;
+};
+
 
 const app  = express();
 const PORT = process.env.PORT || 3001;
@@ -262,6 +286,68 @@ app.delete('/api/customers/:id', authenticate, async (req, res) => {
     await pool.query('DELETE FROM customers WHERE id = $1', [req.params.id]);
     auditLog(req, 'DELETE', 'customers', req.params.id);
     res.json({ message: 'Cliente eliminado' });
+});
+
+// ─────────────────────────────────────────────
+// CLIENT CREDENTIALS VAULT
+// ─────────────────────────────────────────────
+app.get('/api/customers/:id/credentials', authenticate, async (req, res) => {
+    try {
+        const { rows } = await pool.query(
+            `SELECT id, client_id, service_name, username, created_at, updated_at 
+             FROM client_credentials WHERE client_id = $1 ORDER BY created_at DESC`,
+            [req.params.id]
+        );
+        res.json({ data: rows });
+    } catch (err) {
+        res.status(500).json({ error: 'Error interno', detail: err.message });
+    }
+});
+
+app.post('/api/customers/:id/credentials', authenticate, requireAdmin, async (req, res) => {
+    const { service_name, username, password } = req.body;
+    if (!service_name || !password) return res.status(400).json({ error: 'Servicio y contraseña son requeridos' });
+    try {
+        const { encrypted, iv, authTag } = encryptText(password);
+        const { rows } = await pool.query(
+            `INSERT INTO client_credentials (client_id, service_name, username, encrypted_pass, iv, auth_tag)
+             VALUES ($1,$2,$3,$4,$5,$6) RETURNING id, client_id, service_name, username, created_at`,
+            [req.params.id, service_name, username, encrypted, iv, authTag]
+        );
+        auditLog(req, 'CREATE', 'client_credentials', rows[0].id, { client_id: req.params.id, service: service_name });
+        res.status(201).json(rows[0]);
+    } catch (err) {
+        res.status(500).json({ error: 'Error interno', detail: err.message });
+    }
+});
+
+app.get('/api/credentials/:id/reveal', authenticate, async (req, res) => {
+    try {
+        const { rows } = await pool.query(
+            `SELECT encrypted_pass, iv, auth_tag, client_id, service_name FROM client_credentials WHERE id = $1`,
+            [req.params.id]
+        );
+        if (!rows[0]) return res.status(404).json({ error: 'Credencial no encontrada' });
+        
+        const decrypted = decryptText(rows[0].encrypted_pass, rows[0].iv, rows[0].auth_tag);
+        auditLog(req, 'REVEAL', 'client_credentials', req.params.id, { client_id: rows[0].client_id, service: rows[0].service_name });
+        
+        res.json({ password: decrypted });
+    } catch (err) {
+        res.status(500).json({ error: 'Error interno', detail: err.message });
+    }
+});
+
+app.delete('/api/credentials/:id', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const { rows } = await pool.query('DELETE FROM client_credentials WHERE id = $1 RETURNING client_id, service_name', [req.params.id]);
+        if (rows[0]) {
+            auditLog(req, 'DELETE', 'client_credentials', req.params.id, { client_id: rows[0].client_id, service: rows[0].service_name });
+        }
+        res.json({ message: 'Credencial eliminada' });
+    } catch (err) {
+        res.status(500).json({ error: 'Error interno', detail: err.message });
+    }
 });
 
 // ─────────────────────────────────────────────
@@ -934,6 +1020,20 @@ app.put('/api/quote-settings', authenticate, requireAdmin, async (req, res) => {
             );
         }
         res.json(result.rows[0]);
+    } catch (err) {
+        res.status(500).json({ error: 'Error interno', detail: err.message });
+    }
+});
+
+// ─────────────────────────────────────────────
+// AUDIT LOGS
+// ─────────────────────────────────────────────
+app.get('/api/audit-logs', authenticate, requireAdmin, async (_req, res) => {
+    try {
+        const { rows } = await pool.query(
+            `SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT 200`
+        );
+        res.json({ data: rows });
     } catch (err) {
         res.status(500).json({ error: 'Error interno', detail: err.message });
     }
