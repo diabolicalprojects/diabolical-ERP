@@ -14,7 +14,7 @@ const getHeaders = () => {
 };
 
 const handleResponse = async (response) => {
-    if (response.status === 401) {
+    if (response.status === 401 && !response.url.includes('/api/auth/login')) {
         localStorage.removeItem('diabolical_token');
         localStorage.removeItem('diabolical_user');
         window.location.href = '/login';
