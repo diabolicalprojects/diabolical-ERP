@@ -9,7 +9,13 @@ import dotenv from 'dotenv';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import pool from './db.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 dotenv.config();
 
@@ -1061,11 +1067,60 @@ app.use((req, res) => {
 });
 
 // ─────────────────────────────────────────────
-// Start Server
+// BOOTSTRAP: Ensure Schema and Admin
 // ─────────────────────────────────────────────
-app.listen(PORT, () => {
-    console.log(`\n🚀 ERP Diabolical API → http://localhost:${PORT}`);
-    console.log(`   Entorno: ${process.env.NODE_ENV || 'development'}\n`);
+const initDB = async () => {
+    try {
+        // 1. Check if users table exists
+        const tableCheck = await pool.query(`
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables 
+                WHERE table_schema = 'public' 
+                AND table_name = 'users'
+            );
+        `);
+
+        if (!tableCheck.rows[0].exists) {
+            console.log('[INIT] Table "users" not found. Applying schema...');
+            const schemaPath = path.join(__dirname, 'schema.sql');
+            if (fs.existsSync(schemaPath)) {
+                const schema = fs.readFileSync(schemaPath, 'utf8');
+                await pool.query(schema);
+                console.log('[INIT] Schema applied successfully.');
+            } else {
+                console.warn('[INIT] schema.sql not found. Cannot auto-initialize tables.');
+            }
+        }
+
+        // 2. Check for admin user
+        const adminCheck = await pool.query('SELECT COUNT(*) FROM users WHERE role = $1', ['admin']);
+        if (parseInt(adminCheck.rows[0].count) === 0) {
+            console.log('[INIT] No admin user found. Creating default admin...');
+            
+            const adminEmail = process.env.ADMIN_EMAIL || 'admin@diabolical.ai';
+            const adminPass = process.env.ADMIN_PASSWORD || 'Diabolical2024!';
+            const adminName = process.env.ADMIN_NAME || 'Administrador Diabolical';
+            
+            const hash = await bcrypt.hash(adminPass, 12);
+            
+            await pool.query(
+                `INSERT INTO users (name, email, password, role, is_active) 
+                 VALUES ($1, $2, $3, 'admin', TRUE)`,
+                [adminName, adminEmail, hash]
+            );
+            console.log(`[BOOTSTRAP] Admin created: ${adminEmail}`);
+        }
+    } catch (err) {
+        console.error('[BOOTSTRAP] Error:', err.message);
+    }
+};
+
+// Start Server after Init
+initDB().then(() => {
+    app.listen(PORT, () => {
+        console.log(`\n🚀 ERP Diabolical API → http://localhost:${PORT}`);
+        console.log(`   Entorno: ${process.env.NODE_ENV || 'development'}\n`);
+    });
 });
 
 export default app;
