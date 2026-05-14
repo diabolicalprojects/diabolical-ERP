@@ -5,11 +5,8 @@
     display: flex;
     gap: 1.5rem;
     overflow-x: auto;
-    overflow-y: hidden;
-    padding: 0 1rem 2rem 0;
+    padding-bottom: 2rem;
     -webkit-overflow-scrolling: touch;
-    height: calc(100vh - 180px);
-    width: 100%;
 }
 
 .pipeline-column {

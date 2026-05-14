@@ -109,9 +109,6 @@ h4 {
     margin-left: var(--sidebar-width);
     min-height: 100vh;
     width: calc(100% - var(--sidebar-width));
-    overflow-x: hidden; /* Prevent body scroll, let children handle it */
-    display: flex;
-    flex-direction: column;
 }
 
 @media (max-width: 1024px) {
@@ -228,50 +225,40 @@ h4 {
     background: var(--text-primary);
     color: var(--bg-black);
     border: none;
-    padding: 0.8rem 1.6rem;
-    border-radius: 14px;
+    padding: 0.75rem 1.5rem;
+    border-radius: 12px;
     font-family: 'Nexa Bold', sans-serif;
-    font-weight: 800;
-    font-size: 0.9rem;
+    font-weight: bold;
     cursor: pointer;
     display: flex;
     align-items: center;
-    justify-content: center;
-    gap: 0.6rem;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    border: 1px solid transparent;
+    gap: 0.5rem;
+    transition: filter 0.2s, transform 0.1s;
 }
 
 .btn-primary:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 10px 20px -10px rgba(255, 255, 255, 0.3);
+    filter: brightness(1.1);
 }
 
 .btn-primary:active {
-    transform: translateY(0);
+    transform: scale(0.98);
 }
 
 .btn-secondary {
     background: var(--glass);
     color: var(--text-primary);
     border: 1px solid var(--glass-border);
-    padding: 0.8rem 1.6rem;
-    border-radius: 14px;
+    padding: 0.75rem 1.5rem;
+    border-radius: 12px;
     font-family: 'Nexa Bold', sans-serif;
-    font-weight: 800;
-    font-size: 0.9rem;
+    font-weight: bold;
     cursor: pointer;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.6rem;
+    transition: background 0.2s, color 0.2s;
 }
 
 .btn-secondary:hover {
-    background: rgba(255, 255, 255, 0.1);
-    border-color: var(--text-primary);
-    transform: translateY(-2px);
+    background: var(--text-primary);
+    color: var(--bg-black);
 }
 
 /* Modals */
@@ -602,12 +589,6 @@ h4 {
         display: block !important;
     }
 
-    h1 {
-        font-size: 24pt;
-        color: #7c3aed !important;
-        margin-bottom: 10pt;
-    }
-
     h3 {
         font-size: 16pt;
         margin-bottom: 15pt;
@@ -618,19 +599,5 @@ h4 {
     .recharts-responsive-container {
         width: 100% !important;
         height: 300px !important;
-        /* Fixed height for consistency in PDF */
     }
-
-    .print-only-header {
-        display: flex !important;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 40pt;
-        border-bottom: 3px solid #7c3aed;
-        padding-bottom: 20pt;
-    }
-}
-
-.print-only-header {
-    display: none;
 }

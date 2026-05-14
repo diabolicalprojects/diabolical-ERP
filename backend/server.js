@@ -99,12 +99,13 @@ const requireAdmin = (req, res, next) => {
 // ─────────────────────────────────────────────
 // Helper: generic paginated list
 // ─────────────────────────────────────────────
-const paginatedQuery = async (res, sql, params = [], countSql = null, countParams = []) => {
+const paginatedQuery = async (res, sql, params = []) => {
     try {
         const { rows } = await pool.query(sql, params);
         res.json({ data: rows });
     } catch (err) {
         console.error(err);
+        res.status(500).json({ error: 'Error en base de datos' });
     }
 };
 
@@ -338,9 +339,9 @@ app.get('/api/credentials/:credentialId/reveal', authenticate, async (req, res) 
         if (!cred) return res.status(404).json({ error: 'Credencial no encontrada' });
 
         const password = decryptPassword(cred.encrypted_password, cred.iv, cred.auth_tag);
-        
+
         auditLog(req, 'REVEAL_CREDENTIAL', 'customers', cred.client_id, { service: cred.service_name });
-        
+
         res.json({ password });
     } catch (err) {
         res.status(500).json({ error: 'Error al desencriptar. Clave maestra inválida o datos corruptos.' });
@@ -523,13 +524,14 @@ app.post('/api/purchases', authenticate, async (req, res) => {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
+
         const { rows } = await client.query(
             `INSERT INTO purchases (purchase_no, vendor_id, vendor_name, total, status, date)
              VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
             [purchase_no, vendor_id, vendor_name, total || 0, status || 'pendiente', date || new Date()]
         );
         const purchase = rows[0];
-        
+
         for (const item of items) {
             await client.query(
                 `INSERT INTO purchase_items (purchase_id, item_ref_id, name, price, quantity)
@@ -537,7 +539,7 @@ app.post('/api/purchases', authenticate, async (req, res) => {
                 [purchase.id, item.item_ref_id, item.name, item.price, item.quantity]
             );
         }
-        
+
         await client.query('COMMIT');
         auditLog(req, 'CREATE', 'purchases', purchase.id, { purchase_no, items_count: items.length });
         res.status(201).json(purchase);
@@ -554,7 +556,7 @@ app.patch('/api/purchases/:id/receive', authenticate, async (req, res) => {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
-        
+
         // Verificar si ya fue recibida
         const { rows: check } = await client.query('SELECT status FROM purchases WHERE id = $1', [req.params.id]);
         if (!check.length) return res.status(404).json({ error: 'Orden no encontrada' });
@@ -767,13 +769,12 @@ app.patch('/api/receivables/:id/pay', authenticate, async (req, res) => {
     const { amount } = req.body;
     if (!amount || amount <= 0) return res.status(400).json({ error: 'Monto inválido' });
     try {
-        // Validación de negocio contra sobrepagos
         const { rows: current } = await pool.query('SELECT amount, paid, status FROM receivables WHERE id = $1', [req.params.id]);
         if (!current.length) return res.status(404).json({ error: 'Factura no encontrada' });
-        
+
         const invoice = current[0];
         const remaining = Number(invoice.amount) - Number(invoice.paid);
-        
+
         if (amount > remaining) {
             return res.status(400).json({ error: `El abono excede el saldo pendiente (${remaining})` });
         }
@@ -783,14 +784,13 @@ app.patch('/api/receivables/:id/pay', authenticate, async (req, res) => {
                 paid = paid + $1,
                 status = CASE
                     WHEN (paid + $1) >= amount THEN 'pagado'
-                    WHEN status = 'vencido' THEN 'vencido'
                     WHEN (paid + $1) > 0 THEN 'parcial'
                     ELSE status END,
                 updated_at = NOW()
              WHERE id = $2 RETURNING *`,
             [amount, req.params.id]
         );
-        
+
         auditLog(req, 'UPDATE', 'receivables', req.params.id, { payment_amount: amount, new_balance: rows[0].amount - rows[0].paid });
         res.json(rows[0]);
     } catch (err) {
@@ -1071,7 +1071,6 @@ app.use((req, res) => {
 // ─────────────────────────────────────────────
 const initDB = async () => {
     try {
-        // 1. Check if users table exists
         const tableCheck = await pool.query(`
             SELECT EXISTS (
                 SELECT FROM information_schema.tables 
@@ -1092,15 +1091,14 @@ const initDB = async () => {
             }
         }
 
-        // 2. Ensure admin user exists and is up to date
         console.log('[INIT] Syncing administrator account...');
-        
+
         const adminEmail = process.env.ADMIN_EMAIL || 'admin@diabolical.ai';
         const adminPass = process.env.ADMIN_PASSWORD || 'Diabolical2024!';
         const adminName = process.env.ADMIN_NAME || 'Administrador Diabolical';
-        
+
         const hash = await bcrypt.hash(adminPass, 12);
-        
+
         await pool.query(
             `INSERT INTO users (name, email, password, role, is_active) 
              VALUES ($1, $2, $3, 'admin', TRUE)
@@ -1117,7 +1115,6 @@ const initDB = async () => {
     }
 };
 
-// Start Server after Init
 initDB().then(() => {
     app.listen(PORT, () => {
         console.log(`\n🚀 ERP Diabolical API → http://localhost:${PORT}`);

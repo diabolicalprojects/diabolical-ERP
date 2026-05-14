@@ -1,14 +1,12 @@
 import React, { useState } from 'react';
-import { Search, Plus, User, Phone, Mail, X, Trash2, Shield, Lock } from 'lucide-react';
+import { Search, Plus, User, Phone, Mail, X, Trash2 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import ModuleTutorial from '../Common/ModuleTutorial';
-import ClientCredentialsVault from './ClientCredentialsVault';
 
 const Customers = () => {
     const { customers, customerStatuses, addCustomer, updateCustomer, deleteCustomer } = useApp();
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [isVaultOpen, setIsVaultOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [newCust, setNewCust] = useState({ name: '', contact: '', phone: '', email: '', status: 'potencial', address: '', altContact: '' });
     const [selectedClient, setSelectedClient] = useState(null);
@@ -163,14 +161,6 @@ const Customers = () => {
                                     </div>
                                 </div>
 
-                                <button 
-                                    className="btn-secondary" 
-                                    style={{ width: '100%', marginTop: '1rem', background: 'rgba(124, 58, 237, 0.1)', borderColor: 'var(--purple-main)' }}
-                                    onClick={() => setIsVaultOpen(true)}
-                                >
-                                    <Shield size={18} /> Bóveda de Credenciales
-                                </button>
-
                                 <div style={{ marginTop: '2.5rem', display: 'flex', gap: '1rem' }}>
                                     <button className="btn-secondary" style={{ flex: 1, color: 'var(--error)' }} onClick={() => { deleteCustomer(selectedClient.id); setSelectedClient(null); }}>
                                         <Trash2 size={18} /> Eliminar
@@ -238,16 +228,6 @@ const Customers = () => {
                             </div>
                         </motion.div>
                     </div>
-                )}
-            </AnimatePresence>
-            <AnimatePresence>
-                {isVaultOpen && selectedClient && (
-                    <ClientCredentialsVault 
-                        clientId={selectedClient.id} 
-                        clientName={selectedClient.name} 
-                        isOpen={isVaultOpen} 
-                        onClose={() => setIsVaultOpen(false)} 
-                    />
                 )}
             </AnimatePresence>
         </div>

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Save, ShoppingBag, Plus, Trash2, Box, Briefcase, Zap, ClipboardList, Settings, ChevronRight } from 'lucide-react';
+import { X, Save, ShoppingBag, Plus, Trash2, Box, Briefcase, Zap, ClipboardList } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useApp } from '../../context/AppContext';
 

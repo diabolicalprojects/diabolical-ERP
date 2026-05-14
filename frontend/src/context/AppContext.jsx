@@ -107,7 +107,7 @@ export const AppProvider = ({ children }) => {
         await api.put(`/api/inventory/${id}`, updated);
         syncData();
     };
-    
+
     // CRM
     const addDeal = async (stage, deal) => {
         await api.post('/api/deals', { ...deal, stage });
@@ -147,7 +147,7 @@ export const AppProvider = ({ children }) => {
         document.documentElement.setAttribute('data-theme', theme);
         const storedUser = localStorage.getItem('diabolical_user');
         if (storedUser) setUser(JSON.parse(storedUser));
-        
+
         if (isAuthenticated) {
             syncData();
         } else {
@@ -179,4 +179,3 @@ export const AppProvider = ({ children }) => {
 };
 
 export const useApp = () => useContext(AppContext);
-

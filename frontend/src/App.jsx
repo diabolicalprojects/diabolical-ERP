@@ -1,8 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Link, useLocation, useNavigate, Navigate } from 'react-router-dom';
+import React, { useState } from 'react';
+import { BrowserRouter as Router, Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useApp, AppProvider } from './context/AppContext';
-import Login from './components/Common/Login';
-import { api } from './services/api';
 import {
     LayoutDashboard,
     Users,
@@ -41,20 +39,9 @@ import Roles from './components/Roles/Roles';
 const Dashboard = () => {
     const { deals, projects, tracking, toggleTracking, receivables, payables } = useApp();
     const navigate = useNavigate();
-    const [summary, setSummary] = useState({
-        pipeline: 0,
-        cxc_pending: 0,
-        cxp_pending: 0,
-        quotes_accepted: 0
-    });
 
-    useEffect(() => {
-        api.get('/api/metrics/summary').then(setSummary).catch(console.error);
-    }, []);
-
-    const pipelineValue = summary.pipeline;
-    const totalCxC = summary.cxc_pending;
-    const salesMonth = summary.quotes_accepted;
+    const pipelineValue = Object.values(deals).flat().reduce((acc, d) => acc + d.value, 0);
+    const totalCxC = receivables.reduce((acc, r) => acc + (r.amount - r.paid), 0);
 
     return (
         <div className="animate-fade">
@@ -74,15 +61,15 @@ const Dashboard = () => {
                 <div className="glass-card kpi-card">
                     <div className="kpi-icon purple"><TrendingUp size={20} /></div>
                     <div className="kpi-info">
-                        <span className="subtitle">Ventas (Cerradas)</span>
-                        <h2>${(salesMonth / 1000).toFixed(1)}k</h2>
+                        <span className="subtitle">Ventas Mes</span>
+                        <h2>$128k</h2>
                     </div>
                 </div>
                 <div className="glass-card kpi-card">
                     <div className="kpi-icon violet"><Briefcase size={20} /></div>
                     <div className="kpi-info">
                         <span className="subtitle">Pipeline</span>
-                        <h2>${(pipelineValue / 1000).toFixed(1)}k</h2>
+                        <h2>${(pipelineValue / 1000).toFixed(0)}k</h2>
                     </div>
                 </div>
                 <div className="glass-card kpi-card">
@@ -137,7 +124,7 @@ const Dashboard = () => {
 };
 
 const Sidebar = ({ isOpen, toggleSidebar }) => {
-    const { theme, toggleTheme, user, logout } = useApp();
+    const { theme, toggleTheme, userRole } = useApp();
     const location = useLocation();
 
     const menuItems = [
@@ -180,28 +167,15 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
                         <span>Modo {theme === 'dark' ? 'Claro' : 'Oscuro'}</span>
                     </button>
 
-                    <div className="user-profile" style={{ position: 'relative' }}>
+                    <div className="user-profile">
                         <div className="avatar">
-                            {user?.name?.substring(0, 2).toUpperCase() || 'US'}
+                            {userRole === 'admin' ? 'AD' : 'US'}
                         </div>
                         <div className="user-info">
-                            <p style={{ fontWeight: 500, fontSize: '0.85rem' }}>{user?.name || 'Usuario'}</p>
-                            <p style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>{user?.role || 'user'}</p>
+                            <p style={{ fontWeight: 500, fontSize: '0.85rem' }}>Juan Doe</p>
+                            <p style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>{userRole}</p>
                         </div>
-                        <button 
-                            onClick={logout}
-                            style={{ 
-                                marginLeft: 'auto', 
-                                background: 'none', 
-                                border: 'none', 
-                                color: 'var(--error)', 
-                                cursor: 'pointer',
-                                padding: '5px'
-                            }}
-                            title="Cerrar Sesión"
-                        >
-                            <X size={18} />
-                        </button>
+                        <Settings size={18} style={{ marginLeft: 'auto', opacity: 0.5, cursor: 'pointer' }} />
                     </div>
                 </div>
             </aside>
@@ -223,7 +197,6 @@ const SplashScreen = ({ finishLoading }) => (
             zIndex: 9999
         }}
         initial={{ opacity: 1 }}
-        animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         transition={{ duration: 0.8, ease: "easeInOut" }}
     >
@@ -232,7 +205,7 @@ const SplashScreen = ({ finishLoading }) => (
             animate={{ scale: 1, opacity: 1, y: 0 }}
             transition={{
                 duration: 1,
-                ease: [0.16, 1, 0.3, 1],
+                ease: [0.16, 1, 0.3, 1], // Custom cubic-bezier for elegance
                 delay: 0.2
             }}
             style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2rem' }}
@@ -245,7 +218,7 @@ const SplashScreen = ({ finishLoading }) => (
                 style={{ textAlign: 'center' }}
             >
                 <h1 style={{ color: 'white', fontSize: '1.2rem', fontWeight: 400, letterSpacing: '0.3em', textTransform: 'uppercase' }}>DIABOLICAL</h1>
-                <p style={{ color: 'var(--text-secondary)', fontSize: '0.7rem', marginTop: '10px', letterSpacing: '0.1em' }}>SISTEMA ERP IA</p>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.7rem', marginTop: '10px', letterSpacing: '0.1em' }}>AGENCIA DE SERVICIOS IA</p>
             </motion.div>
         </motion.div>
 
@@ -262,32 +235,15 @@ const SplashScreen = ({ finishLoading }) => (
 );
 
 const AppContent = () => {
-    const { isAuthenticated, loading: contextLoading } = useApp();
     const [sidebarOpen, setSidebarOpen] = useState(false);
-    const [splashLoading, setSplashLoading] = useState(true);
-    
+    const [isLoading, setIsLoading] = useState(true);
     const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
-
-    // Fallback: Si después de 3 segundos sigue cargando, forzar el cierre del splash
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            setSplashLoading(false);
-        }, 3000);
-        return () => clearTimeout(timer);
-    }, []);
-
-    // Si aún está cargando el contexto o el splash, mostrar splash
-    const showSplash = splashLoading || contextLoading;
 
     return (
         <Router>
             <AnimatePresence mode="wait">
-                {showSplash ? (
-                    <SplashScreen key="splash" finishLoading={() => setSplashLoading(false)} />
-                ) : !isAuthenticated ? (
-                    <motion.div key="login" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                        <Login />
-                    </motion.div>
+                {isLoading ? (
+                    <SplashScreen key="splash" finishLoading={() => setIsLoading(false)} />
                 ) : (
                     <div className="layout" key="app">
                         <button className="mobile-menu-btn" onClick={toggleSidebar}>
@@ -306,7 +262,6 @@ const AppContent = () => {
                                     <Route path="/finanzas" element={<Finances />} />
                                     <Route path="/metricas" element={<Metrics />} />
                                     <Route path="/seguridad" element={<Roles />} />
-                                    <Route path="*" element={<Navigate to="/" replace />} />
                                 </Routes>
                             </AnimatePresence>
                         </main>
